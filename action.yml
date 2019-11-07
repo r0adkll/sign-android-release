@@ -1,10 +1,28 @@
-name: 'Your name here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'Drew Heavner'
+description: 'An action to sign an Android release APK or AAB'
+author: 'r0adkll'
+branding:
+  icon: 'edit'
+  color: 'orange'
 inputs:
-  myInput:              # change this
-    description: 'input description here'
-    default: 'default value if applicable'
+  releaseDirectory:
+    description: 'The directory to find your release to sign'
+    required: true
+  signingKeyBase64:
+    description: 'The key used to sign your release in base64 encoded format'
+    required: true
+  alias:
+    description: 'The key alias'
+    required: true
+  keyStorePassword:
+    description: 'The password to the keystore'
+    required: true
+  keyPassword:
+    description: 'The password for the key'
+    required: true
+outputs:
+  signedReleaseFile:
+    description: 'The signed release APK or AAB file'
 runs:
   using: 'node12'
   main: 'lib/main.js'
