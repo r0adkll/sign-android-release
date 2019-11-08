@@ -1,10 +1,8 @@
 import * as core from '@actions/core';
-import {wait} from './wait'
 import {signAabFile, signApkFile} from "./signing";
-const path = require('path');
-const fs = require('fs');
-const io = require('io-utils');
-const sign = require('signing');
+import path from "path";
+import fs from "fs";
+import * as io from "./io-utils";
 
 async function run() {
   try {
@@ -40,7 +38,7 @@ async function run() {
       core.exportVariable("SIGNED_RELEASE_FILE", signedReleaseFile);
       core.setOutput('signedReleaseFile', signedReleaseFile);
     } else {
-      core.error("No release file (.apk or .aab) could be found. Abort.")
+      core.error("No release file (.apk or .aab) could be found. Abort.");
       core.setFailed('No release file (.apk or .aab) could be found.');
     }
   } catch (error) {
