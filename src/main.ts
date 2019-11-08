@@ -19,11 +19,14 @@ async function run() {
     if (releaseFile !== undefined) {
       core.debug(`Found release to sign: ${releaseFile.name}`);
 
-      // 2. Now that we have a release file, decode and save the signing key
+      // 2. Install Android tools
+      await io.downloadAndroidTools();
+
+      // 3. Now that we have a release file, decode and save the signing key
       const signingKey = path.join(releaseDir, 'signingKey.jks');
       fs.writeFileSync(signingKey, signingKeyBase64, 'base64');
 
-      // 3. Now zipalign the release file
+      // 4. Now zipalign the release file
       const releaseFilePath = path.join(releaseDir, releaseFile.name);
       let signedReleaseFile = '';
       if (releaseFile.name.endsWith('.apk')) {
