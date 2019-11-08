@@ -28,7 +28,7 @@ export async function signApkFile(
     // Align the apk file
     const alignedApkFile = apkFile.replace('.apk', '-aligned.apk');
     await exec.exec(`"${zipAlign}"`, [
-        '-v', '-p 4',
+        '-v', '-p', '4',
         apkFile,
         alignedApkFile
     ]);
@@ -46,6 +46,13 @@ export async function signApkFile(
         '--ks', signingKeyFile,
         '--out', signedApkFile,
         alignedApkFile
+    ]);
+
+    // Verify
+    core.debug("Verifying Signed APK");
+    await exec.exec(`"${apkSigner}"`, [
+        'verify',
+        signedApkFile
     ]);
 
     return signedApkFile
