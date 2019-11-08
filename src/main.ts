@@ -19,9 +19,6 @@ async function run() {
     if (releaseFile !== undefined) {
       core.debug(`Found release to sign: ${releaseFile.name}`);
 
-      // 2. Install Android tools
-      await io.downloadAndroidTools();
-
       // 3. Now that we have a release file, decode and save the signing key
       const signingKey = path.join(releaseDir, 'signingKey.jks');
       fs.writeFileSync(signingKey, signingKeyBase64, 'base64');
@@ -37,6 +34,9 @@ async function run() {
         core.error('No valid release file to sign, abort.');
         core.setFailed('No valid release file to sign.');
       }
+
+      console.log('Release signed!');
+      core.debug('Release signed! Setting outputs');
 
       core.exportVariable("SIGNED_RELEASE_FILE", signedReleaseFile);
       core.setOutput('signedReleaseFile', signedReleaseFile);
