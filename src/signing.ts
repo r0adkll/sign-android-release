@@ -44,6 +44,9 @@ export async function signApkFile(
     await exec.exec(`"${apkSigner}"`, [
         'sign',
         '--ks', signingKeyFile,
+        '--ks-key-alias', alias,
+        '--ks-pass', `pass:${keyStorePassword}`,
+        '--key-pass', `pass:${keyPassword}`,
         '--out', signedApkFile,
         alignedApkFile
     ]);
