@@ -12,6 +12,13 @@ This action will help you sign an Android `.apk` or `.aab` (Android App Bundle) 
 
 **Required:** The base64 encoded signing key used to sign your app
 
+This action will directly decode this input to a file to sign your release with. You can prepare your key by running this command on *nix systems.
+
+```bash
+openssl base64 < some_signing_key.jks | tr -d '\n' | tee some_signing_key.jks.base64.txt
+```
+Then copy the contents of the `.txt` file to your GH secrets
+
 ### `alias`
 
 **Required:** The alias of your signing key 
