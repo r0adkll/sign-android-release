@@ -29,7 +29,7 @@ Then copy the contents of the `.txt` file to your GH secrets
 
 ### `keyPassword`
 
-**Required:** The private key password for your signing keystore
+**Optional:** The private key password for your signing keystore
 
 ## Outputs
 

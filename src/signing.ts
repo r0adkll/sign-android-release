@@ -9,7 +9,7 @@ export async function signApkFile(
     signingKeyFile: string,
     alias: string,
     keyStorePassword: string,
-    keyPassword: string
+    keyPassword?: string
 ): Promise<string> {
 
     core.debug("Zipaligning APK file");
@@ -41,15 +41,20 @@ export async function signApkFile(
 
     // apksigner sign --ks my-release-key.jks --out my-app-release.apk my-app-unsigned-aligned.apk
     const signedApkFile = apkFile.replace('.apk', '-signed.apk');
-    await exec.exec(`"${apkSigner}"`, [
+    const args = [
         'sign',
         '--ks', signingKeyFile,
         '--ks-key-alias', alias,
         '--ks-pass', `pass:${keyStorePassword}`,
-        '--key-pass', `pass:${keyPassword}`,
-        '--out', signedApkFile,
-        alignedApkFile
-    ]);
+        '--out', signedApkFile
+    ];
+
+    if (keyPassword) {
+        args.push('--key-pass', `pass:${keyPassword}`);
+    }
+    args.push(alignedApkFile);
+
+    await exec.exec(`"${apkSigner}"`, args);
 
     // Verify
     core.debug("Verifying Signed APK");
@@ -66,19 +71,23 @@ export async function signAabFile(
     signingKeyFile: string,
     alias: string,
     keyStorePassword: string,
-    keyPassword: string
+    keyPassword?: string,
 ): Promise<string> {
     core.debug("Signing AAB file");
     const jarSignerPath = await io.which('jarsigner', true);
     core.debug(`Found 'jarsigner' @ ${jarSignerPath}`);
-
-    await exec.exec(`"${jarSignerPath}"`, [
+    const args = [
         '-keystore', signingKeyFile,
         '-storepass', keyStorePassword,
-        '-keypass', keyPassword,
-        aabFile,
-        alias
-    ]);
+    ];
+
+    if (keyPassword) {
+        args.push('-keypass', keyPassword);
+    }
+
+    args.push(aabFile, alias);
+
+    await exec.exec(`"${jarSignerPath}"`, args);
 
     return aabFile
 }

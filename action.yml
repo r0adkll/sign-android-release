@@ -19,7 +19,7 @@ inputs:
     required: true
   keyPassword:
     description: 'The password for the key'
-    required: true
+    required: false
 outputs:
   signedReleaseFile:
     description: 'The signed release APK or AAB file'
