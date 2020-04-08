@@ -46,7 +46,7 @@ This also set's an environment variable that points to the signed release file
 ```yaml
 uses: r0adkll/sign-android-release@v1
 with:
-  releaseDirectory: /app/build/outputs/apk/release
+  releaseDirectory: app/build/outputs/apk/release
   signingKeyBase64: ${{ secrets.SIGNING_KEY }}
   alias: ${{ secrets.ALIAS }}
   keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
