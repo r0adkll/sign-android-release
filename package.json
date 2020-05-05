@@ -1,13 +1,13 @@
 {
   "name": "sign-android-release",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
   "description": "GitHub action used to sign Android release packages",
   "main": "lib/main.js",
   "scripts": {
     "build": "tsc",
     "test": "jest",
-    "deploy": "npm run build && ./update_release.sh"
+    "deploy": "tsc && ./update_release.sh"
   },
   "repository": {
     "type": "git",
