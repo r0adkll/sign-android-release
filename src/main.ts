@@ -16,12 +16,13 @@ async function run() {
 
     // 1. Find release files
     const releaseFiles = io.findReleaseFile(releaseDir);
-    if (releaseFiles !== undefined) {
+    if (releaseFiles !== undefined && releaseFiles.length !== 0) {
       // 3. Now that we have a release files, decode and save the signing key
       const signingKey = path.join(releaseDir, 'signingKey.jks');
       fs.writeFileSync(signingKey, signingKeyBase64, 'base64');
 
       // 4. Now zipalign and sign each one of the the release files
+      let signedReleaseFiles = Array()
       for (let releaseFile of releaseFiles) {
         core.debug(`Found release to sign: ${releaseFile.name}`);
         const releaseFilePath = path.join(releaseDir, releaseFile.name);
@@ -36,9 +37,10 @@ async function run() {
         }
 
         core.debug('Release signed! Setting outputs.');
-        core.exportVariable("SIGNED_RELEASE_FILE", signedReleaseFile);
-        core.setOutput('signedReleaseFile', signedReleaseFile);
+        signedReleaseFiles.push(signedReleaseFile);
       }
+      core.exportVariable('SIGNED_RELEASE_FILE', signedReleaseFiles.join(", "));
+      core.setOutput('signedReleaseFile', signedReleaseFiles.join(", "));
       console.log('Releases signed!');
     } else {
       core.error("No release files (.apk or .aab) could be found. Abort.");
