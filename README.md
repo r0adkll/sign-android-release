@@ -40,7 +40,8 @@ are returned as a comma delimited string. Example: `"path-to-first-signed.apk, p
 
 ### ENV: `SIGNED_RELEASE_FILE`
 
-This also set's an environment variable that points to the signed release file
+This also set's an environment variable that points to the signed release file. We set the enviroment variable as
+a comma delimited string as well just like above.
 
 ## Example usage
 
