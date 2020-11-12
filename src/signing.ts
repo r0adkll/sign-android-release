@@ -15,7 +15,7 @@ export async function signApkFile(
     core.debug("Zipaligning APK file");
 
     // Find zipalign executable
-    const buildToolsVersion = process.env.BUILD_TOOLS_VERSION || '29.0.2';
+    const buildToolsVersion = process.env.BUILD_TOOLS_VERSION || '29.0.3';
     const androidHome = process.env.ANDROID_HOME;
     const buildTools = path.join(androidHome!, `build-tools/${buildToolsVersion}`);
     if (!fs.existsSync(buildTools)) {
@@ -28,7 +28,12 @@ export async function signApkFile(
     // Align the apk file
     const alignedApkFile = apkFile.replace('.apk', '-aligned.apk');
     await exec.exec(`"${zipAlign}"`, [
+        '-c',
         '-v', '4',
+        apkFile
+    ]);
+    
+    await exec.exec(`"cp"`, [
         apkFile,
         alignedApkFile
     ]);
