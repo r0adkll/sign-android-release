@@ -1,6 +1,6 @@
 {
   "name": "sign-android-release",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "GitHub action used to sign Android release packages",
   "main": "lib/main.js",
@@ -21,16 +21,16 @@
   "author": "r0adkll",
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.0.0",
-    "@actions/exec": "^1.0.1",
-    "@actions/io": "^1.0.1"
+    "@actions/core": "^1.2.6",
+    "@actions/exec": "^1.0.4",
+    "@actions/io": "^1.0.2"
   },
   "devDependencies": {
     "@types/jest": "^24.0.13",
     "@types/node": "^12.0.4",
     "jest": "^24.8.0",
     "jest-circus": "^24.7.1",
-    "ts-jest": "^24.0.2",
+    "ts-jest": "^26.4.4",
     "typescript": "^3.5.1"
   }
 }
