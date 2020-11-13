@@ -1,14 +1,14 @@
 /*! *****************************************************************************
-Copyright (c) Microsoft Corporation. All rights reserved.
+Copyright (c) Microsoft Corporation. All rights reserved. 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 this file except in compliance with the License. You may obtain a copy of the
-License at http://www.apache.org/licenses/LICENSE-2.0
-
+License at http://www.apache.org/licenses/LICENSE-2.0  
+ 
 THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
-WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-MERCHANTABLITY OR NON-INFRINGEMENT.
-
+WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, 
+MERCHANTABLITY OR NON-INFRINGEMENT. 
+ 
 See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 ***************************************************************************** */
@@ -17,13 +17,6 @@ and limitations under the License.
 
 /// <reference no-default-lib="true"/>
 
-
-type FlatArray<Arr, Depth extends number> = {
-    "done": Arr,
-    "recur": Arr extends ReadonlyArray<infer InnerArr>
-        ? FlatArray<InnerArr, [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20][Depth]>
-        : Arr
-}[Depth extends -1 ? "done" : "recur"];
 
 interface ReadonlyArray<T> {
 
@@ -38,7 +31,7 @@ interface ReadonlyArray<T> {
      * thisArg is omitted, undefined is used as the this value.
      */
     flatMap<U, This = undefined> (
-        callback: (this: This, value: T, index: number, array: T[]) => U | ReadonlyArray<U>,
+        callback: (this: This, value: T, index: number, array: T[]) => U|ReadonlyArray<U>,
         thisArg?: This
     ): U[]
 
@@ -49,10 +42,94 @@ interface ReadonlyArray<T> {
      *
      * @param depth The maximum recursion depth
      */
-    flat<A, D extends number = 1>(
-        this: A,
-        depth?: D
-    ): FlatArray<A, D>[]
+    flat<U>(this:
+        ReadonlyArray<U[][][][]> |
+
+        ReadonlyArray<ReadonlyArray<U[][][]>> |
+        ReadonlyArray<ReadonlyArray<U[][]>[]> |
+        ReadonlyArray<ReadonlyArray<U[]>[][]> |
+        ReadonlyArray<ReadonlyArray<U>[][][]> |
+
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U[][]>>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U>[][]>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>[][]> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U>[]>[]> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U[]>>[]> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U[]>[]>> |
+
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<U[]>>>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<U>[]>>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>[]>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>>[]> |
+
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>>>>,
+        depth: 4): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this:
+        ReadonlyArray<U[][][]> |
+
+        ReadonlyArray<ReadonlyArray<U>[][]> |
+        ReadonlyArray<ReadonlyArray<U[]>[]> |
+        ReadonlyArray<ReadonlyArray<U[][]>> |
+
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U[]>>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U>[]>> |
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>[]> |
+
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>>>,
+        depth: 3): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this:
+        ReadonlyArray<U[][]> |
+
+        ReadonlyArray<ReadonlyArray<U[]>> |
+        ReadonlyArray<ReadonlyArray<U>[]> |
+
+        ReadonlyArray<ReadonlyArray<ReadonlyArray<U>>>,
+        depth: 2): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this:
+        ReadonlyArray<U[]> |
+        ReadonlyArray<ReadonlyArray<U>>,
+        depth?: 1
+    ): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this:
+        ReadonlyArray<U>,
+        depth: 0
+    ): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth. If no depth is provided, flat method defaults to the depth of 1.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(depth?: number): any[];
   }
 
 interface Array<T> {
@@ -68,7 +145,7 @@ interface Array<T> {
      * thisArg is omitted, undefined is used as the this value.
      */
     flatMap<U, This = undefined> (
-        callback: (this: This, value: T, index: number, array: T[]) => U | ReadonlyArray<U>,
+        callback: (this: This, value: T, index: number, array: T[]) => U|ReadonlyArray<U>,
         thisArg?: This
     ): U[]
 
@@ -78,8 +155,69 @@ interface Array<T> {
      *
      * @param depth The maximum recursion depth
      */
-    flat<A, D extends number = 1>(
-        this: A,
-        depth?: D
-    ): FlatArray<A, D>[]
+    flat<U>(this: U[][][][][][][][], depth: 7): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[][][][][][][], depth: 6): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[][][][][][], depth: 5): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[][][][][], depth: 4): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[][][][], depth: 3): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[][][], depth: 2): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[][], depth?: 1): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(this: U[], depth: 0): U[];
+
+    /**
+     * Returns a new array with all sub-array elements concatenated into it recursively up to the
+     * specified depth. If no depth is provided, flat method defaults to the depth of 1.
+     *
+     * @param depth The maximum recursion depth
+     */
+    flat<U>(depth?: number): any[];
 }
