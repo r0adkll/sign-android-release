@@ -31,6 +31,10 @@ Then copy the contents of the `.txt` file to your GH secrets
 
 **Optional:** The private key password for your signing keystore
 
+## ENV: `BUILD_TOOLS_VERSION`
+
+**Optional:** You can manually specify a version of build-tools to use. We use `29.0.3` by default.
+
 ## Outputs
 
 ### `signedReleaseFile`
@@ -44,11 +48,26 @@ This also set's an environment variable that points to the signed release file
 ## Example usage
 
 ```yaml
-uses: r0adkll/sign-android-release@v1
-with:
-  releaseDirectory: app/build/outputs/apk/release
-  signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-  alias: ${{ secrets.ALIAS }}
-  keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-  keyPassword: ${{ secrets.KEY_PASSWORD }}
+steps:
+  # ...
+
+  - uses: r0adkll/sign-android-release@v1
+    name: Sign app APK
+    # ID used to access action output
+    id: sign_app
+    with:
+      releaseDirectory: app/build/outputs/apk/release
+      signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+      alias: ${{ secrets.ALIAS }}
+      keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+      keyPassword: ${{ secrets.KEY_PASSWORD }}
+    env:
+      // override default build-tools version (29.0.3) -- optional
+      BUILD_TOOLS_VERSION: "30.0.2"
+      
+  # Example use of `signedReleaseFile` output -- not needed
+  - uses: actions/upload-artifact@v2
+    with:
+      name: Signed app bundle
+      path: ${{steps.sign_app.outputs.signedReleaseFile}}
 ```

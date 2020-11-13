@@ -26,10 +26,10 @@
     "@actions/io": "^1.0.2"
   },
   "devDependencies": {
-    "@types/jest": "^24.0.13",
+    "@types/jest": "^26.0.15",
     "@types/node": "^12.0.4",
-    "jest": "^24.8.0",
-    "jest-circus": "^24.7.1",
+    "jest": "^26.6.3",
+    "jest-circus": "^26.6.3",
     "ts-jest": "^26.4.4",
     "typescript": "^3.5.1"
   }
