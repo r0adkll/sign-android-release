@@ -21,7 +21,7 @@ Then copy the contents of the `.txt` file to your GH secrets
 
 ### `alias`
 
-**Required:** The alias of your signing key 
+**Required:** The alias of your signing key
 
 ### `keyStorePassword`
 
@@ -39,11 +39,13 @@ Then copy the contents of the `.txt` file to your GH secrets
 
 ### `signedReleaseFile`
 
-The path to the signed release file from this action
+The path(s) to the signed release file(s) from this action. If there is more than one apk file, the paths of the files
+are returned as a comma delimited string. Example: `"path-to-first-signed.apk, path-to-second-signed.apk"`.
 
 ### ENV: `SIGNED_RELEASE_FILE`
 
-This also set's an environment variable that points to the signed release file
+This also set's an environment variable that points to the signed release file. We set the enviroment variable as
+a comma delimited string as well just like above.
 
 ## Example usage
 
