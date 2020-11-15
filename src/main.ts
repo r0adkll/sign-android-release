@@ -6,6 +6,11 @@ import * as io from "./io-utils";
 
 async function run() {
   try {
+    if (process.env.DEBUG_ACTION === 'true') {
+      core.debug("DEBUG FLAG DETECTED, SHORTCUTTING ACTION.")
+      return;
+    }
+
     const releaseDir = core.getInput('releaseDirectory');
     const signingKeyBase64 = core.getInput('signingKeyBase64');
     const alias = core.getInput('alias');

@@ -14,6 +14,11 @@ jobs:
       - name: Run Tests
         run: npm run test
 
+      - name: Verify Checkout
+        uses: ./
+        env:
+          DEBUG_ACTION: true
+
       - name: Update v1 Tag
         uses: hole19/git-tag-action@master
         env:
