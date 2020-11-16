@@ -1,4 +1,5 @@
 __tests__/runner/*
+.vscode
 
 # comment out in distribution branches
 #node_modules/
