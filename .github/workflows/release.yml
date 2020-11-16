@@ -21,7 +21,7 @@ jobs:
         with:
           path: __tests__/test_key_b64.txt
 
-      - uses: r0adkll/sign-android-release@${{ github.sha }}
+      - uses: ./
         name: Sign APK
         with:
           releaseDirectory: __tests__/apk
@@ -30,7 +30,7 @@ jobs:
           keyStorePassword: android
           keyPassword: android
 
-      - uses: r0adkll/sign-android-release@${{ github.sha }}
+      - uses: ./
         name: Sign AAB
         with:
           releaseDirectory: __tests__/aab
