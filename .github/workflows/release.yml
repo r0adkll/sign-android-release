@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    name: Test action
+
     steps:
       - uses: actions/checkout@v1
         name: Checkout code
@@ -40,7 +42,10 @@ jobs:
           keyPassword: android
 
   release:
+    needs: test
     runs-on: ubuntu-latest
+    name: Update action
+
     steps:
       - uses: actions/checkout@v1
         name: Checkout code
