@@ -6,18 +6,49 @@ on:
       - master
 
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
+    name: Test action
+
     steps:
       - uses: actions/checkout@v1
+        name: Checkout code
 
-      - name: Run Tests
+      - name: Run tests
         run: npm run test
 
-      - name: Verify Checkout
-        uses: ./
-        env:
-          DEBUG_ACTION: true
+      - uses: pCYSl5EDgo/cat@1.0.0
+        name: Cat for GitHub Actions
+        id: get_key
+        with:
+          path: __tests__/test_key_b64.txt
+
+      - uses: ./
+        name: Sign APK
+        with:
+          releaseDirectory: __tests__/apk
+          signingKeyBase64: ${{ steps.get_key.outputs.text }}
+          alias: test_key
+          keyStorePassword: android
+          keyPassword: android
+
+      - uses: ./
+        name: Sign AAB
+        with:
+          releaseDirectory: __tests__/aab
+          signingKeyBase64: ${{ steps.get_key.outputs.text }}
+          alias: test_key
+          keyStorePassword: android
+          keyPassword: android
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    name: Update action
+
+    steps:
+      - uses: actions/checkout@v1
+        name: Checkout code
 
       - name: Update v1 Tag
         uses: hole19/git-tag-action@master
