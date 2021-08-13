@@ -37,20 +37,26 @@ Then copy the contents of the `.txt` file to your GH secrets
 
 ## Outputs
 
-### `signedReleaseFile`
+Output variables are set both locally and in environment variables.
 
-The path to the signed release file from this action
+### `signedReleaseFile`/ ENV: `SIGNED_RELEASE_FILE`
 
-### ENV: `SIGNED_RELEASE_FILE`
+The path to the single release file that have been signed with this action.
+Not set if several release files have been signed.
 
-This also set's an environment variable that points to the signed release file
+### `signedReleaseFiles` / ENV: `SIGNED_RELEASE_FILES`
+
+The paths to the release files that have been signed with this action,
+separated by `:`.
 
 ## Example usage
 
+### Single APK
+
+The output variable `signedReleaseFile` can be used in a release action.
+
 ```yaml
 steps:
-  # ...
-
   - uses: r0adkll/sign-android-release@v1
     name: Sign app APK
     # ID used to access action output
@@ -64,10 +70,78 @@ steps:
     env:
       // override default build-tools version (29.0.3) -- optional
       BUILD_TOOLS_VERSION: "30.0.2"
-      
+
   # Example use of `signedReleaseFile` output -- not needed
   - uses: actions/upload-artifact@v2
     with:
       name: Signed app bundle
       path: ${{steps.sign_app.outputs.signedReleaseFile}}
+```
+
+### Multiple APKs, multiple variables
+
+The output variables `signedReleaseFileX`
+can be used to refer to each signed release file.
+
+```yaml
+steps:
+  - uses: r0adkll/sign-android-release@v1
+    id: sign_app
+    with:
+      releaseDirectory: app/build/outputs/apk/release
+      signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+      alias: ${{ secrets.ALIAS }}
+      keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+      keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+  - name: Example Release
+    uses: "marvinpinto/action-automatic-releases@latest"
+    with:
+      repo_token: "${{ secrets.GITHUB_TOKEN }}"
+      automatic_release_tag: "latest"
+      prerelease: true
+      title: "Release X"
+      files: |
+        ${{ steps.sign_app.signedReleaseFile0 }}
+        ${{ steps.sign_app.signedReleaseFile1 }}
+        ${{ steps.sign_app.signedReleaseFile2 }}
+        ${{ steps.sign_app.signedReleaseFile3 }}
+        ${{ steps.sign_app.signedReleaseFile4 }}
+```
+
+### Multiple APKs, single variable
+
+The output variable `signedReleaseFiles` must be split first,
+before being used in a release action.
+
+```yaml
+steps:
+  - uses: r0adkll/sign-android-release@v1
+    id: sign_app
+    with:
+      releaseDirectory: app/build/outputs/apk/release
+      signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+      alias: ${{ secrets.ALIAS }}
+      keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+      keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+  - uses: jungwinter/split@v1
+    id: signed_files
+    with:
+      msg: ${{ steps.sign_app.signedReleaseFiles }}
+      separator: ':'
+
+  - name: Example Release
+    uses: "marvinpinto/action-automatic-releases@latest"
+    with:
+      repo_token: "${{ secrets.GITHUB_TOKEN }}"
+      automatic_release_tag: "latest"
+      prerelease: true
+      title: "Release X"
+      files: |
+        ${{ steps.signed_files._0 }}
+        ${{ steps.signed_files._1 }}
+        ${{ steps.signed_files._2 }}
+        ${{ steps.signed_files._3 }}
+        ${{ steps.signed_files._4 }}
 ```

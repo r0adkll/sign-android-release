@@ -22,7 +22,37 @@ inputs:
     required: false
 outputs:
   signedReleaseFile:
-    description: 'The signed release APK or AAB file'
+    description: 'The signed release APK or AAB file, if single'
+  signedReleaseFiles:
+    description: 'The signed release APK or AAB files'
+  nofSignedReleaseFiles:
+    description: 'The number of signed release files'
+  signedReleaseFile0:
+    description: 'The Oth signed release APK or AAB file'
+  signedReleaseFile1:
+    description: 'The 1st signed release APK or AAB file'
+  signedReleaseFile2:
+    description: 'The 2nd signed release APK or AAB file'
+  signedReleaseFile3:
+    description: 'The 3rd signed release APK or AAB file'
+  signedReleaseFile4:
+    description: 'The 4th signed release APK or AAB file'
+  signedReleaseFile5:
+    description: 'The 5th signed release APK or AAB file'
+  signedReleaseFile6:
+    description: 'The 6th signed release APK or AAB file'
+  signedReleaseFile7:
+    description: 'The 7th signed release APK or AAB file'
+  signedReleaseFile8:
+    description: 'The 8th signed release APK or AAB file'
+  signedReleaseFile9:
+    description: 'The 9th signed release APK or AAB file'
+  signedReleaseFile10:
+    description: 'The 10th signed release APK or AAB file'
+  signedReleaseFile11:
+    description: 'The 11th signed release APK or AAB file'
+  signedReleaseFile12:
+    description: 'The 12th signed release APK or AAB file'
 runs:
   using: 'node12'
   main: 'lib/main.js'
