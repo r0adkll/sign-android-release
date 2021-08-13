@@ -68,7 +68,7 @@ steps:
       keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
       keyPassword: ${{ secrets.KEY_PASSWORD }}
     env:
-      // override default build-tools version (29.0.3) -- optional
+      # override default build-tools version (29.0.3) -- optional
       BUILD_TOOLS_VERSION: "30.0.2"
 
   # Example use of `signedReleaseFile` output -- not needed
