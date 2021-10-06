@@ -16,6 +16,8 @@ async function run() {
     const alias = core.getInput('alias');
     const keyStorePassword = core.getInput('keyStorePassword');
     const keyPassword = core.getInput('keyPassword');
+    const trimUnsignedStr = core.getInput('trimUnsigned');
+    const trimUnsigned = trimUnsignedStr !== null && trimUnsignedStr === "true";
 
     console.log(`Preparing to sign file(s) @ ${releaseDir} with signing key`);
 
@@ -34,7 +36,7 @@ async function run() {
         const releaseFilePath = path.join(releaseDir, releaseFile.name);
         let signedReleaseFile = '';
         if (releaseFile.name.endsWith('.apk')) {
-          signedReleaseFile = await signApkFile(releaseFilePath, signingKey, alias, keyStorePassword, keyPassword);
+          signedReleaseFile = await signApkFile(releaseFilePath, trimUnsigned, signingKey, alias, keyStorePassword, keyPassword);
         } else if (releaseFile.name.endsWith('.aab')) {
           signedReleaseFile = await signAabFile(releaseFilePath, signingKey, alias, keyStorePassword, keyPassword);
         } else {
