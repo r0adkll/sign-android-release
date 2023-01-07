@@ -1,4 +1,4 @@
-name: 'Sign Android release'
+name: 'Sign Android'
 description: 'An action to sign an Android release APK or AAB'
 author: 'r0adkll'
 branding:
