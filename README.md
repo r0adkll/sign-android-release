@@ -85,7 +85,7 @@ can be used to refer to each signed release file.
 
 ```yaml
 steps:
-  - uses: r0adkll/sign-android-release@v1
+  - uses: noriab/sign-android-release@v3
     id: sign_app
     with:
       releaseDirectory: app/build/outputs/apk/release
