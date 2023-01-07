@@ -17,7 +17,7 @@ jobs:
       - name: Run tests
         run: npm run test
 
-      - uses: pCYSl5EDgo/cat@1.0.0
+      - uses: pCYSl5EDgo/cat@1.0.1
         name: Cat for GitHub Actions
         id: get_key
         with:
