@@ -57,7 +57,7 @@ The output variable `signedReleaseFile` can be used in a release action.
 
 ```yaml
 steps:
-  - uses: r0adkll/sign-android-release@v1
+  - uses: noriban/sign-android-release@v3
     name: Sign app APK
     # ID used to access action output
     id: sign_app
@@ -116,7 +116,7 @@ before being used in a release action.
 
 ```yaml
 steps:
-  - uses: r0adkll/sign-android-release@v1
+  - uses: noriban/sign-android-release@v3
     id: sign_app
     with:
       releaseDirectory: app/build/outputs/apk/release

@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/r0adkll/sign-android-release.git"
+    "url": "git+https://github.com/noriban/sign-android-release.git"
   },
   "keywords": [
     "actions",

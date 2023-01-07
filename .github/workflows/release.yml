@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - "**.md"
+      - "**.yml"
+
 
 jobs:
   test:
@@ -53,5 +57,5 @@ jobs:
       - name: Update v1 Tag
         uses: hole19/git-tag-action@master
         env:
-          TAG: v2
+          TAG: v3
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
