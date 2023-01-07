@@ -11,7 +11,7 @@ jobs:
     name: Test action
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
         name: Checkout code
 
       - name: Run tests
@@ -47,7 +47,7 @@ jobs:
     name: Update action
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
         name: Checkout code
 
       - name: Update v1 Tag
