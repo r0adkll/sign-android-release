@@ -53,5 +53,5 @@ jobs:
       - name: Update v1 Tag
         uses: hole19/git-tag-action@master
         env:
-          TAG: v1
+          TAG: v2
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
