@@ -6,12 +6,10 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    target-branch: "development"
     directory: "/" # Location of package manifests
     schedule:
       interval: "daily"
   - package-ecosystem: "npm"
-    target-branch: "development"
     directory: "/" # Location of package manifests
     schedule:
       interval: "daily"
