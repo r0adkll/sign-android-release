@@ -60,6 +60,16 @@ if (process.platform === 'win32') {
 }
 ```
 
+### ignoring all lines until told
+
+```js
+/* c8 ignore start */
+function dontMindMe() {
+  // ...
+}
+/* c8 ignore stop */
+```
+
 ### ignoring the same line as the comment
 
 ```js

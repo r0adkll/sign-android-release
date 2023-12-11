@@ -5,7 +5,7 @@ const { CookieJar } = require("tough-cookie");
 const NodeImpl = require("./Node-impl").implementation;
 const idlUtils = require("../generated/utils");
 const NODE_TYPE = require("../node-type");
-const { mixin, memoizeQuery } = require("../../utils");
+const { hasWeakRefs, mixin, memoizeQuery } = require("../../utils");
 const { firstChildWithLocalName, firstChildWithLocalNames, firstDescendantWithLocalName } =
   require("../helpers/traversal");
 const whatwgURL = require("whatwg-url");
@@ -27,6 +27,7 @@ const { fireAnEvent } = require("../helpers/events");
 const { shadowIncludingInclusiveDescendantsIterator } = require("../helpers/shadow-dom");
 const { enqueueCECallbackReaction } = require("../helpers/custom-elements");
 const { createElement, internalCreateElementNSSteps } = require("../helpers/create-element");
+const IterableWeakSet = require("../helpers/iterable-weak-set");
 
 const DocumentOrShadowRootImpl = require("./DocumentOrShadowRoot-impl").implementation;
 const GlobalEventHandlersImpl = require("./GlobalEventHandlers-impl").implementation;
@@ -142,10 +143,14 @@ class DocumentImpl extends NodeImpl {
     this._currentScript = null;
     this._pageShowingFlag = false;
     this._cookieJar = privateData.options.cookieJar;
-    this._parseOptions = privateData.options.parseOptions;
+    this._parseOptions = privateData.options.parseOptions || {};
     this._scriptingDisabled = privateData.options.scriptingDisabled;
     if (this._cookieJar === undefined) {
       this._cookieJar = new CookieJar(null, { looseMode: true });
+    }
+
+    if (this._scriptingDisabled) {
+      this._parseOptions.scriptingEnabled = false;
     }
 
     this.contentType = privateData.options.contentType;
@@ -158,7 +163,9 @@ class DocumentImpl extends NodeImpl {
     }
 
     this._URL = parsed;
-    this._origin = whatwgURL.serializeURLOrigin(parsed);
+    this._origin = urlOption === "about:blank" && privateData.options.parentOrigin ?
+      privateData.options.parentOrigin :
+      whatwgURL.serializeURLOrigin(this._URL);
 
     this._location = Location.createImpl(this._globalObject, [], { relevantDocument: this });
     this._history = History.createImpl(this._globalObject, [], {
@@ -167,17 +174,10 @@ class DocumentImpl extends NodeImpl {
       actAsIfLocationReloadCalled: () => this._location.reload()
     });
 
-    this._workingNodeIterators = [];
-    this._workingNodeIteratorsMax = privateData.options.concurrentNodeIterators === undefined ?
-                                    10 :
-                                    Number(privateData.options.concurrentNodeIterators);
-
-    if (isNaN(this._workingNodeIteratorsMax)) {
-      throw new TypeError("The 'concurrentNodeIterators' option must be a Number");
-    }
-
-    if (this._workingNodeIteratorsMax < 0) {
-      throw new RangeError("The 'concurrentNodeIterators' option must be a non negative Number");
+    if (hasWeakRefs) {
+      this._workingNodeIterators = new IterableWeakSet();
+    } else {
+      this._workingNodeIterators = [];
     }
 
     this._referrer = privateData.options.referrer || "";
@@ -283,13 +283,13 @@ class DocumentImpl extends NodeImpl {
       this.styleSheets._remove(child.sheet);
     }
 
-    super._descendantRemoved.apply(this, arguments);
+    super._descendantRemoved(parent, child);
   }
 
-  write() {
+  write(...args) {
     let text = "";
-    for (let i = 0; i < arguments.length; ++i) {
-      text += String(arguments[i]);
+    for (let i = 0; i < args.length; ++i) {
+      text += args[i];
     }
 
     if (this._parsingMode === "xml") {
@@ -345,8 +345,8 @@ class DocumentImpl extends NodeImpl {
     }
   }
 
-  writeln() {
-    this.write(...arguments, "\n");
+  writeln(...args) {
+    this.write(...args, "\n");
   }
 
   // This is implemented separately for Document (which has a _ids cache) and DocumentFragment (which does not).
@@ -456,7 +456,8 @@ class DocumentImpl extends NodeImpl {
       return new Promise(resolve => {
         if (!this._deferQueue.tail) {
           dispatchEvent();
-          return resolve();
+          resolve();
+          return;
         }
 
         this._deferQueue.setListener(() => {
@@ -464,7 +465,7 @@ class DocumentImpl extends NodeImpl {
           resolve();
         });
 
-        return this._deferQueue.resume();
+        this._deferQueue.resume();
       });
     };
 
@@ -478,10 +479,11 @@ class DocumentImpl extends NodeImpl {
       return new Promise(resolve => {
         if (this._asyncQueue.count() === 0) {
           dispatchEvent();
-          return resolve();
+          resolve();
+          return;
         }
 
-        return this._asyncQueue.setListener(() => {
+        this._asyncQueue.setListener(() => {
           dispatchEvent();
           resolve();
         });
@@ -774,10 +776,14 @@ class DocumentImpl extends NodeImpl {
   createNodeIterator(root, whatToShow, filter) {
     const nodeIterator = NodeIterator.createImpl(this._globalObject, [], { root, whatToShow, filter });
 
-    this._workingNodeIterators.push(nodeIterator);
-    while (this._workingNodeIterators.length > this._workingNodeIteratorsMax) {
-      const toInactivate = this._workingNodeIterators.shift();
-      toInactivate._working = false;
+    if (hasWeakRefs) {
+      this._workingNodeIterators.add(nodeIterator);
+    } else {
+      this._workingNodeIterators.push(nodeIterator);
+      while (this._workingNodeIterators.length > 10) {
+        const toInactivate = this._workingNodeIterators.shift();
+        toInactivate._working = false;
+      }
     }
 
     return nodeIterator;

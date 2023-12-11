@@ -5,6 +5,10 @@
  * RFC 4648.
  */
 function btoa(s) {
+  if (arguments.length === 0) {
+    throw new TypeError("1 argument required, but only 0 present.");
+  }
+
   let i;
   // String conversion as required by Web IDL.
   s = `${s}`;

@@ -5,6 +5,10 @@
  * instead of throwing INVALID_CHARACTER_ERR we return null.
  */
 function atob(data) {
+  if (arguments.length === 0) {
+    throw new TypeError("1 argument required, but only 0 present.");
+  }
+
   // Web IDL requires DOMStrings to just be converted using ECMAScript
   // ToString, which in our case amounts to using a template literal.
   data = `${data}`;

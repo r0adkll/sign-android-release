@@ -45,6 +45,7 @@ function tryImplForWrapper(wrapper) {
 
 const iterInternalSymbol = Symbol("internal");
 const IteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
+const AsyncIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf(async function* () {}).prototype);
 
 function isArrayIndexPropName(P) {
   if (typeof P !== "string") {
@@ -72,6 +73,22 @@ function isArrayBuffer(value) {
   }
 }
 
+function iteratorResult([key, value], kind) {
+  let result;
+  switch (kind) {
+    case "key":
+      result = key;
+      break;
+    case "value":
+      result = value;
+      break;
+    case "key+value":
+      result = [key, value];
+      break;
+  }
+  return { value: result, done: false };
+}
+
 const supportsPropertyIndex = Symbol("supports property index");
 const supportedPropertyIndices = Symbol("supported property indices");
 const supportsPropertyName = Symbol("supports property name");
@@ -83,6 +100,11 @@ const namedGet = Symbol("named property get");
 const namedSetNew = Symbol("named property set new");
 const namedSetExisting = Symbol("named property set existing");
 const namedDelete = Symbol("named property delete");
+
+const asyncIteratorNext = Symbol("async iterator get the next iteration result");
+const asyncIteratorReturn = Symbol("async iterator return steps");
+const asyncIteratorInit = Symbol("async iterator initialization steps");
+const asyncIteratorEOI = Symbol("async iterator end of iteration");
 
 module.exports = exports = {
   isObject,
@@ -97,6 +119,7 @@ module.exports = exports = {
   tryImplForWrapper,
   iterInternalSymbol,
   IteratorPrototype,
+  AsyncIteratorPrototype,
   isArrayBuffer,
   isArrayIndexPropName,
   supportsPropertyIndex,
@@ -109,5 +132,10 @@ module.exports = exports = {
   namedGet,
   namedSetNew,
   namedSetExisting,
-  namedDelete
+  namedDelete,
+  asyncIteratorNext,
+  asyncIteratorReturn,
+  asyncIteratorInit,
+  asyncIteratorEOI,
+  iteratorResult
 };

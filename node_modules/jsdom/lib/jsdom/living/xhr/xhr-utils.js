@@ -1,6 +1,5 @@
 "use strict";
 const fs = require("fs");
-const request = require("request");
 const { EventEmitter } = require("events");
 const { URL } = require("whatwg-url");
 const parseDataURL = require("data-urls");
@@ -8,7 +7,9 @@ const DOMException = require("domexception/webidl2js-wrapper");
 
 const ProgressEvent = require("../generated/ProgressEvent");
 
-const wrapCookieJarForRequest = require("../helpers/wrap-cookie-jar-for-request");
+const agentFactory = require("../helpers/agent-factory");
+const Request = require("../helpers/http-request");
+const FormData = require("form-data");
 const { fireAnEvent } = require("../helpers/events");
 
 const headerListSeparatorRegexp = /,[ \t]*/;
@@ -90,7 +91,9 @@ function validCORSPreflightHeaders(xhr, response, flag, properties) {
   }
   const acahStr = response.headers["access-control-allow-headers"];
   const acah = new Set(acahStr ? acahStr.trim().toLowerCase().split(headerListSeparatorRegexp) : []);
-  const forbiddenHeaders = Object.keys(flag.requestHeaders).filter(header => {
+  const forbiddenHeaders = acah.has("*") ?
+  [] :
+  Object.keys(flag.requestHeaders).filter(header => {
     const lcHeader = header.toLowerCase();
     return !simpleHeaders.has(lcHeader) && !acah.has(lcHeader);
   });
@@ -131,7 +134,12 @@ function requestErrorSteps(xhr, event, exception) {
 
 function setResponseToNetworkError(xhr) {
   const { properties } = xhr;
-  properties.responseCache = properties.responseTextCache = properties.responseXMLCache = null;
+
+  properties.responseBuffer =
+    properties.responseCache =
+    properties.responseTextCache =
+    properties.responseXMLCache = null;
+
   properties.responseHeaders = {};
   xhr.status = 0;
   xhr.statusText = "";
@@ -152,7 +160,6 @@ function createClient(xhr) {
     response.statusCode = 200;
     response.rawHeaders = [];
     response.headers = {};
-    response.request = { uri: urlObj };
     const filePath = urlObj.pathname
       .replace(/^file:\/\//, "")
       .replace(/^\/([a-z]):\//i, "$1:/")
@@ -195,15 +202,13 @@ function createClient(xhr) {
       client.on("end", rmReq);
     }
 
-    process.nextTick(() => client.emit("response", response));
+    process.nextTick(() => client.emit("response", response, urlObj.href));
 
     return client;
   }
 
   if (urlObj.protocol === "data:") {
     const response = new EventEmitter();
-
-    response.request = { uri: urlObj };
 
     const client = new EventEmitter();
 
@@ -225,7 +230,7 @@ function createClient(xhr) {
     };
 
     process.nextTick(() => {
-      client.emit("response", response);
+      client.emit("response", response, urlObj.href);
       process.nextTick(() => {
         response.emit("data", buffer);
         client.emit("data", buffer);
@@ -236,7 +241,7 @@ function createClient(xhr) {
 
     return client;
   }
-
+  const agents = agentFactory(flag.proxy, flag.strictSSL);
   const requestHeaders = {};
 
   for (const header in flag.requestHeaders) {
@@ -261,27 +266,13 @@ function createClient(xhr) {
     requestHeaders.Origin = flag.origin;
   }
 
-  const options = {
-    uri,
-    method: flag.method,
-    headers: requestHeaders,
-    gzip: true,
-    maxRedirects: 21,
-    followAllRedirects: true,
-    encoding: null,
-    strictSSL: flag.strictSSL,
-    proxy: flag.proxy,
-    forever: true
-  };
+  const options = { rejectUnauthorized: flag.strictSSL, agents, followRedirects: true };
   if (flag.auth) {
-    options.auth = {
-      user: flag.auth.user || "",
-      pass: flag.auth.pass || "",
-      sendImmediately: false
-    };
+    options.user = flag.auth.user || "";
+    options.pass = flag.auth.pass || "";
   }
   if (flag.cookieJar && (!crossOrigin || flag.withCredentials)) {
-    options.jar = wrapCookieJarForRequest(flag.cookieJar);
+    options.cookieJar = flag.cookieJar;
   }
 
   const { body } = flag;
@@ -290,30 +281,53 @@ function createClient(xhr) {
                   body !== "" &&
                   !(ucMethod === "HEAD" || ucMethod === "GET");
 
-  if (hasBody && !flag.formData) {
-    options.body = body;
-  }
-
   if (hasBody && getRequestHeader(flag.requestHeaders, "content-type") === null) {
     requestHeaders["Content-Type"] = "text/plain;charset=UTF-8";
   }
 
   function doRequest() {
     try {
-      const client = request(options);
-
-      if (hasBody && flag.formData) {
-        const form = client.form();
-        for (const entry of body) {
-          form.append(entry.name, entry.value, entry.options);
+      let requestBody = body;
+      let len = 0;
+      if (hasBody) {
+        if (flag.formData) {
+          // TODO: implement https://html.spec.whatwg.org/#multipart-form-data
+          // directly instead of using an external library
+          requestBody = new FormData();
+          for (const entry of body) {
+            requestBody.append(entry.name, entry.value, entry.options);
+          }
+          len = requestBody.getLengthSync();
+          requestHeaders["Content-Type"] = `multipart/form-data; boundary=${requestBody.getBoundary()}`;
+        } else {
+          if (typeof body === "string") {
+            len = Buffer.byteLength(body);
+          } else {
+            len = body.length;
+          }
+          requestBody = Buffer.isBuffer(requestBody) ? requestBody : Buffer.from(requestBody);
+        }
+        requestHeaders["Content-Length"] = len;
+      }
+      requestHeaders["Accept-Encoding"] = "gzip, deflate";
+      const requestClient = new Request(uri, options, { method: flag.method, headers: requestHeaders });
+      if (hasBody) {
+        if (flag.formData) {
+          requestBody.on("error", err => {
+            requestClient.emit("error", err);
+            requestClient.abort();
+          });
+          requestClient.pipeRequest(requestBody);
+        } else {
+          requestClient.write(requestBody);
         }
       }
-
-      return client;
+      return requestClient;
     } catch (e) {
-      const client = new EventEmitter();
-      process.nextTick(() => client.emit("error", e));
-      return client;
+      const eventEmitterclient = new EventEmitter();
+      process.nextTick(() => eventEmitterclient.emit("error", e));
+      eventEmitterclient.end = () => {};
+      return eventEmitterclient;
     }
   }
 
@@ -325,11 +339,11 @@ function createClient(xhr) {
   if (crossOrigin && (!simpleMethods.has(ucMethod) || nonSimpleHeaders.length > 0 || properties.uploadListener)) {
     client = new EventEmitter();
 
-    const preflightRequestHeaders = [];
+    const preflightRequestHeaders = {};
     for (const header in requestHeaders) {
-      // the only existing request headers the cors spec allows on the preflight request are Origin and Referrer
+      // the only existing request headers the cors spec allows on the preflight request are Origin and Referer
       const lcHeader = header.toLowerCase();
-      if (lcHeader === "origin" || lcHeader === "referrer") {
+      if (lcHeader === "origin" || lcHeader === "referer") {
         preflightRequestHeaders[header] = requestHeaders[header];
       }
     }
@@ -343,19 +357,12 @@ function createClient(xhr) {
 
     flag.preflight = true;
 
-    const preflightOptions = {
+    const rejectUnauthorized = flag.strictSSL;
+    const preflightClient = new Request(
       uri,
-      method: "OPTIONS",
-      headers: preflightRequestHeaders,
-      followRedirect: false,
-      encoding: null,
-      pool: flag.pool,
-      strictSSL: flag.strictSSL,
-      proxy: flag.proxy,
-      forever: true
-    };
-
-    const preflightClient = request(preflightOptions);
+      { agents, followRedirects: false },
+      { method: "OPTIONS", headers: preflightRequestHeaders, rejectUnauthorized }
+    );
 
     preflightClient.on("response", resp => {
       // don't send the real request if the preflight request returned an error
@@ -368,8 +375,9 @@ function createClient(xhr) {
         setResponseToNetworkError(xhr);
         return;
       }
+      // Set request gzip option right before headers are set
       const realClient = doRequest();
-      realClient.on("response", res => client.emit("response", res));
+      realClient.on("response", (...args) => client.emit("response", ...args));
       realClient.on("data", chunk => client.emit("data", chunk));
       realClient.on("end", () => client.emit("end"));
       realClient.on("abort", () => client.emit("abort"));
@@ -377,23 +385,29 @@ function createClient(xhr) {
         client.headers = realClient.headers;
         client.emit("request", req);
       });
-      realClient.on("redirect", () => {
-        client.response = realClient.response;
-        client.emit("redirect");
+      realClient.on("redirect", (...args) => {
+        client.emit("redirect", ...args);
       });
-      realClient.on("error", err => client.emit("error", err));
+      realClient.on("error", err => {
+        client.emit("error", err);
+      });
       client.abort = () => {
         realClient.abort();
       };
+      setImmediate(() => realClient.end());
     });
 
-    preflightClient.on("error", err => client.emit("error", err));
+    preflightClient.on("error", err => {
+      client.emit("error", err);
+    });
 
     client.abort = () => {
       preflightClient.abort();
     };
+    setImmediate(() => preflightClient.end());
   } else {
     client = doRequest();
+    setImmediate(() => client.end());
   }
 
   if (requestManager) {
@@ -409,7 +423,6 @@ function createClient(xhr) {
     client.on("error", rmReq);
     client.on("end", rmReq);
   }
-
   return client;
 }
 

@@ -34,7 +34,7 @@ class HTMLFormElementImpl extends HTMLElementImpl {
       }
     }
 
-    super._descendantAdded.apply(this, arguments);
+    super._descendantAdded(parent, child);
   }
 
   _descendantRemoved(parent, child) {
@@ -44,7 +44,7 @@ class HTMLFormElementImpl extends HTMLElementImpl {
       }
     }
 
-    super._descendantRemoved.apply(this, arguments);
+    super._descendantRemoved(parent, child);
   }
 
   _getElementNodes() {
@@ -191,7 +191,7 @@ class HTMLFormElementImpl extends HTMLElementImpl {
   // https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#statically-validate-the-constraints
   _staticallyValidateConstraints() {
     const controls = [];
-    for (const el of domSymbolTree.treeIterator(this)) {
+    for (const el of this.elements) {
       if (el.form === this && isSubmittable(el)) {
         controls.push(el);
       }
