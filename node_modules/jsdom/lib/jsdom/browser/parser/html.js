@@ -3,6 +3,7 @@
 const parse5 = require("parse5");
 
 const { createElement } = require("../../living/helpers/create-element");
+const { HTML_NS } = require("../../living/helpers/namespaces");
 
 const DocumentType = require("../../living/generated/DocumentType");
 const DocumentFragment = require("../../living/generated/DocumentFragment");
@@ -60,7 +61,7 @@ class JSDOMParse5Adapter {
 
     // The _currentElement is undefined when parsing elements at the root of the document.
     if (_currentElement) {
-      return _currentElement.localName === "template" ?
+      return _currentElement.localName === "template" && _currentElement.namespaceURI === HTML_NS ?
         _currentElement.content._ownerDocument :
         _currentElement._ownerDocument;
     }
@@ -195,23 +196,23 @@ class JSDOMParse5Adapter {
 Object.assign(JSDOMParse5Adapter.prototype, serializationAdapter);
 
 function parseFragment(markup, contextElement) {
-  const ownerDocument = contextElement.localName === "template" ?
+  const ownerDocument = contextElement.localName === "template" && contextElement.namespaceURI === HTML_NS ?
     contextElement.content._ownerDocument :
     contextElement._ownerDocument;
 
-  const config = Object.assign({}, ownerDocument._parseOptions, {
-    treeAdapter: new JSDOMParse5Adapter(ownerDocument, {
-      fragment: true
-    })
-  });
+  const config = {
+    ...ownerDocument._parseOptions,
+    treeAdapter: new JSDOMParse5Adapter(ownerDocument, { fragment: true })
+  };
 
   return parse5.parseFragment(contextElement, markup, config);
 }
 
 function parseIntoDocument(markup, ownerDocument) {
-  const config = Object.assign({}, ownerDocument._parseOptions, {
+  const config = {
+    ...ownerDocument._parseOptions,
     treeAdapter: new JSDOMParse5Adapter(ownerDocument)
-  });
+  };
 
   return parse5.parse(markup, config);
 }

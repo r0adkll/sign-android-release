@@ -11,6 +11,7 @@ const { shadowIncludingInclusiveDescendantsIterator } = require("../helpers/shad
 const { isValidCustomElementName, tryUpgradeElement, enqueueCEUpgradeReaction } = require("../helpers/custom-elements");
 
 const idlUtils = require("../generated/utils");
+const IDLFunction = require("../generated/Function.js");
 const HTMLUnknownElement = require("../generated/HTMLUnknownElement");
 
 const LIFECYCLE_CALLBACKS = [
@@ -62,8 +63,9 @@ class CustomElementRegistryImpl {
   }
 
   // https://html.spec.whatwg.org/#dom-customelementregistry-define
-  define(name, ctor, options) {
+  define(name, constructor, options) {
     const { _globalObject } = this;
+    const ctor = constructor.objectReference;
 
     if (!isConstructor(ctor)) {
       throw new TypeError("Constructor argument is not a constructor.");
@@ -81,7 +83,7 @@ class CustomElementRegistryImpl {
       ]);
     }
 
-    const ctorAlreadyRegistered = this._customElementDefinitions.some(entry => entry.ctor === ctor);
+    const ctorAlreadyRegistered = this._customElementDefinitions.some(entry => entry.objectReference === ctor);
     if (ctorAlreadyRegistered) {
       throw DOMException.create(_globalObject, [
         "This constructor has already been registered in the registry.",
@@ -145,7 +147,9 @@ class CustomElementRegistryImpl {
         const callbackValue = prototype[callbackName];
 
         if (callbackValue !== undefined) {
-          lifecycleCallbacks[callbackName] = webIDLConversions.Function(callbackValue);
+          lifecycleCallbacks[callbackName] = IDLFunction.convert(callbackValue, {
+            context: `The lifecycle callback "${callbackName}"`
+          });
         }
       }
 
@@ -177,7 +181,8 @@ class CustomElementRegistryImpl {
     const definition = {
       name,
       localName,
-      ctor,
+      constructor,
+      objectReference: ctor,
       observedAttributes,
       lifecycleCallbacks,
       disableShadow,
@@ -203,7 +208,7 @@ class CustomElementRegistryImpl {
     }
 
     if (this._whenDefinedPromiseMap[name] !== undefined) {
-      this._whenDefinedPromiseMap[name].resolve(undefined);
+      this._whenDefinedPromiseMap[name].resolve(ctor);
       delete this._whenDefinedPromiseMap[name];
     }
   }
@@ -211,7 +216,7 @@ class CustomElementRegistryImpl {
   // https://html.spec.whatwg.org/#dom-customelementregistry-get
   get(name) {
     const definition = this._customElementDefinitions.find(entry => entry.name === name);
-    return definition && definition.ctor;
+    return definition && definition.objectReference;
   }
 
   // https://html.spec.whatwg.org/#dom-customelementregistry-whendefined
@@ -223,9 +228,9 @@ class CustomElementRegistryImpl {
       ));
     }
 
-    const alreadyRegistered = this._customElementDefinitions.some(entry => entry.name === name);
+    const alreadyRegistered = this._customElementDefinitions.find(entry => entry.name === name);
     if (alreadyRegistered) {
-      return Promise.resolve();
+      return Promise.resolve(alreadyRegistered.objectReference);
     }
 
     if (this._whenDefinedPromiseMap[name] === undefined) {

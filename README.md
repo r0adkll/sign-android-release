@@ -102,11 +102,11 @@ steps:
       prerelease: true
       title: "Release X"
       files: |
-        ${{ steps.sign_app.signedReleaseFile0 }}
-        ${{ steps.sign_app.signedReleaseFile1 }}
-        ${{ steps.sign_app.signedReleaseFile2 }}
-        ${{ steps.sign_app.signedReleaseFile3 }}
-        ${{ steps.sign_app.signedReleaseFile4 }}
+        ${{ steps.sign_app.outputs.signedReleaseFile0 }}
+        ${{ steps.sign_app.outputs.signedReleaseFile1 }}
+        ${{ steps.sign_app.outputs.signedReleaseFile2 }}
+        ${{ steps.sign_app.outputs.signedReleaseFile3 }}
+        ${{ steps.sign_app.outputs.signedReleaseFile4 }}
 ```
 
 ### Multiple APKs, single variable
@@ -128,7 +128,7 @@ steps:
   - uses: jungwinter/split@v1
     id: signed_files
     with:
-      msg: ${{ steps.sign_app.signedReleaseFiles }}
+      msg: ${{ steps.sign_app.outputs.signedReleaseFiles }}
       separator: ':'
 
   - name: Example Release

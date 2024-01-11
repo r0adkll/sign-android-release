@@ -2,11 +2,11 @@
   'use strict';
 
 
-  /*
-   *  decimal.js v10.2.1
+  /*!
+   *  decimal.js v10.4.3
    *  An arbitrary-precision Decimal type for JavaScript.
    *  https://github.com/MikeMcl/decimal.js
-   *  Copyright (c) 2020 Michael Mclaughlin <M8ch88l@gmail.com>
+   *  Copyright (c) 2022 Michael Mclaughlin <M8ch88l@gmail.com>
    *  MIT Licence
    */
 
@@ -105,6 +105,7 @@
     invalidArgument = decimalError + 'Invalid argument: ',
     precisionLimitExceeded = decimalError + 'Precision limit exceeded',
     cryptoUnavailable = decimalError + 'crypto unavailable',
+    tag = '[object Decimal]',
 
     mathfloor = Math.floor,
     mathpow = Math.pow,
@@ -122,7 +123,7 @@
     PI_PRECISION = PI.length - 1,
 
     // Decimal.prototype object
-    P = { name: '[object Decimal]' };
+    P = { toStringTag: tag };
 
 
   // Decimal prototype methods
@@ -131,6 +132,7 @@
   /*
    *  absoluteValue             abs
    *  ceil
+   *  clampedTo                 clamp
    *  comparedTo                cmp
    *  cosine                    cos
    *  cubeRoot                  cbrt
@@ -209,6 +211,27 @@
    */
   P.ceil = function () {
     return finalise(new this.constructor(this), this.e + 1, 2);
+  };
+
+
+  /*
+   * Return a new Decimal whose value is the value of this Decimal clamped to the range
+   * delineated by `min` and `max`.
+   *
+   * min {number|string|Decimal}
+   * max {number|string|Decimal}
+   *
+   */
+  P.clampedTo = P.clamp = function (min, max) {
+    var k,
+      x = this,
+      Ctor = x.constructor;
+    min = new Ctor(min);
+    max = new Ctor(max);
+    if (!min.s || !max.s) return new Ctor(NaN);
+    if (min.gt(max)) throw Error(invalidArgument + max);
+    k = x.cmp(min);
+    return k < 0 ? min : x.cmp(max) > 0 ? max : new Ctor(x);
   };
 
 
@@ -2445,18 +2468,6 @@
   };
 
 
-  /*
-  // Add aliases to match BigDecimal method names.
-  // P.add = P.plus;
-  P.subtract = P.minus;
-  P.multiply = P.times;
-  P.divide = P.div;
-  P.remainder = P.mod;
-  P.compareTo = P.cmp;
-  P.negate = P.neg;
-   */
-
-
   // Helper functions for Decimal.prototype (P) and/or Decimal methods, and their callers.
 
 
@@ -2628,13 +2639,15 @@
    *
    */
   function cosine(Ctor, x) {
-    var k, y,
-      len = x.d.length;
+    var k, len, y;
+
+    if (x.isZero()) return x;
 
     // Argument reduction: cos(4x) = 8*(cos^4(x) - cos^2(x)) + 1
     // i.e. cos(x) = 8*(cos^4(x/4) - cos^2(x/4)) + 1
 
     // Estimate the optimum number of times to use the argument reduction.
+    len = x.d.length;
     if (len < 32) {
       k = Math.ceil(len / 3);
       y = (1 / tinyPow(4, k)).toString();
@@ -3586,7 +3599,10 @@
   function parseOther(x, str) {
     var base, Ctor, divisor, i, isFloat, len, p, xd, xe;
 
-    if (str === 'Infinity' || str === 'NaN') {
+    if (str.indexOf('_') > -1) {
+      str = str.replace(/(\d)_(?=\d)/g, '$1');
+      if (isDecimal.test(str)) return parseDecimal(x, str);
+    } else if (str === 'Infinity' || str === 'NaN') {
       if (!+str) x.s = NaN;
       x.e = NaN;
       x.d = null;
@@ -3664,7 +3680,9 @@
     var k,
       len = x.d.length;
 
-    if (len < 3) return taylorSeries(Ctor, 2, x, x);
+    if (len < 3) {
+      return x.isZero() ? x : taylorSeries(Ctor, 2, x, x);
+    }
 
     // Argument reduction: sin(5x) = 16*sin^5(x) - 20*sin^3(x) + 5*sin(x)
     // i.e. sin(x) = 16*sin^5(x/5) - 20*sin^3(x/5) + 5*sin(x/5)
@@ -3930,6 +3948,7 @@
    *  atan2
    *  cbrt
    *  ceil
+   *  clamp
    *  clone
    *  config
    *  cos
@@ -3955,6 +3974,7 @@
    *  sinh
    *  sqrt
    *  sub
+   *  sum
    *  tan
    *  tanh
    *  trunc
@@ -4149,6 +4169,19 @@
 
 
   /*
+   * Return a new Decimal whose value is `x` clamped to the range delineated by `min` and `max`.
+   *
+   * x {number|string|Decimal}
+   * min {number|string|Decimal}
+   * max {number|string|Decimal}
+   *
+   */
+  function clamp(x, min, max) {
+    return new this(x).clamp(min, max);
+  }
+
+
+  /*
    * Configure global settings for a Decimal constructor.
    *
    * `obj` is an object with one or more of the following properties,
@@ -4261,7 +4294,7 @@
       x.constructor = Decimal;
 
       // Duplicate.
-      if (v instanceof Decimal) {
+      if (isDecimalInstance(v)) {
         x.s = v.s;
 
         if (external) {
@@ -4381,6 +4414,7 @@
     Decimal.atan2 = atan2;
     Decimal.cbrt = cbrt;          // ES6
     Decimal.ceil = ceil;
+    Decimal.clamp = clamp;
     Decimal.cos = cos;
     Decimal.cosh = cosh;          // ES6
     Decimal.div = div;
@@ -4403,6 +4437,7 @@
     Decimal.sinh = sinh;          // ES6
     Decimal.sqrt = sqrt;
     Decimal.sub = sub;
+    Decimal.sum = sum;
     Decimal.tan = tan;
     Decimal.tanh = tanh;          // ES6
     Decimal.trunc = trunc;        // ES6
@@ -4497,7 +4532,7 @@
    *
    */
   function isDecimalInstance(obj) {
-    return obj instanceof Decimal || obj && obj.name === '[object Decimal]' || false;
+    return obj instanceof Decimal || obj && obj.toStringTag === tag || false;
   }
 
 
@@ -4798,6 +4833,28 @@
 
 
   /*
+   * Return a new Decimal whose value is the sum of the arguments, rounded to `precision`
+   * significant digits using rounding mode `rounding`.
+   *
+   * Only the result is rounded, not the intermediate calculations.
+   *
+   * arguments {number|string|Decimal}
+   *
+   */
+  function sum() {
+    var i = 0,
+      args = arguments,
+      x = new this(args[i]);
+
+    external = false;
+    for (; x.s && ++i < args.length;) x = x.plus(args[i]);
+    external = true;
+
+    return finalise(x, this.precision, this.rounding);
+  }
+
+
+  /*
    * Return a new Decimal whose value is the tangent of `x`, rounded to `precision` significant
    * digits using rounding mode `rounding`.
    *
@@ -4834,7 +4891,7 @@
 
   // Create and configure initial Decimal constructor.
   Decimal = clone(DEFAULTS);
-
+  Decimal.prototype.constructor = Decimal;
   Decimal['default'] = Decimal.Decimal = Decimal;
 
   // Create the internal constants from their string values.
@@ -4854,7 +4911,7 @@
   // Node and other environments that support module.exports.
   } else if (typeof module != 'undefined' && module.exports) {
     if (typeof Symbol == 'function' && typeof Symbol.iterator == 'symbol') {
-      P[Symbol.for('nodejs.util.inspect.custom')] = P.toString;
+      P[Symbol['for']('nodejs.util.inspect.custom')] = P.toString;
       P[Symbol.toStringTag] = 'Decimal';
     }
 

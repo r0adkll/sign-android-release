@@ -115,6 +115,7 @@ class HTMLInputElementImpl extends HTMLElementImpl {
     this._dirtyCheckedness = false;
 
     this._preCheckedRadioState = null;
+    this._legacyActivationBehaviorPreviousIndeterminateState = false;
 
     this.indeterminate = false;
 
@@ -165,10 +166,10 @@ class HTMLInputElementImpl extends HTMLElementImpl {
   }
 
   _legacyPreActivationBehavior() {
-    // The spec says we should check this._mutable here, but browsers don't seem to implement this behavior. See
-    // https://github.com/whatwg/html/issues/3239.
     if (this.type === "checkbox") {
       this.checked = !this.checked;
+      this._legacyActivationBehaviorPreviousIndeterminateState = this.indeterminate;
+      this.indeterminate = false;
     } else if (this.type === "radio") {
       this._preCheckedRadioState = this.checked;
       this.checked = true;
@@ -176,10 +177,9 @@ class HTMLInputElementImpl extends HTMLElementImpl {
   }
 
   _legacyCanceledActivationBehavior() {
-    // The spec says we should check this._mutable here, but browsers don't seem to implement this behavior. See
-    // https://github.com/whatwg/html/issues/3239.
     if (this.type === "checkbox") {
       this.checked = !this.checked;
+      this.indeterminate = this._legacyActivationBehaviorPreviousIndeterminateState;
     } else if (this.type === "radio") {
       if (this._preCheckedRadioState !== null) {
         this.checked = this._preCheckedRadioState;
@@ -189,15 +189,17 @@ class HTMLInputElementImpl extends HTMLElementImpl {
   }
 
   _activationBehavior() {
-    if (!this._mutable) {
+    if (!this._mutable && this.type !== "checkbox" && this.type !== "radio") {
       return;
     }
 
     const { form } = this;
 
     if (this.type === "checkbox" || (this.type === "radio" && !this._preCheckedRadioState)) {
-      fireAnEvent("input", this, undefined, { bubbles: true });
-      fireAnEvent("change", this, undefined, { bubbles: true });
+      if (this.isConnected) {
+        fireAnEvent("input", this, undefined, { bubbles: true });
+        fireAnEvent("change", this, undefined, { bubbles: true });
+      }
     } else if (form && this.type === "submit") {
       form._doSubmit();
     } else if (form && this.type === "reset") {
@@ -254,7 +256,7 @@ class HTMLInputElementImpl extends HTMLElementImpl {
       }
     }
 
-    super._attrModified.apply(this, arguments);
+    super._attrModified(name, value, oldVal);
   }
 
   // https://html.spec.whatwg.org/multipage/input.html#signal-a-type-change
@@ -734,13 +736,6 @@ class HTMLInputElementImpl extends HTMLElementImpl {
     return null;
   }
 
-  set maxLength(value) {
-    if (value < 0) {
-      throw DOMException.create(this._globalObject, ["The index is not in the allowed range.", "IndexSizeError"]);
-    }
-    this.setAttributeNS(null, "maxlength", String(value));
-  }
-
   // Reflected IDL attribute does not care about whether the content attribute applies.
   get maxLength() {
     if (!this.hasAttributeNS(null, "maxlength")) {
@@ -749,11 +744,11 @@ class HTMLInputElementImpl extends HTMLElementImpl {
     return parseInt(this.getAttributeNS(null, "maxlength"));
   }
 
-  set minLength(value) {
+  set maxLength(value) {
     if (value < 0) {
       throw DOMException.create(this._globalObject, ["The index is not in the allowed range.", "IndexSizeError"]);
     }
-    this.setAttributeNS(null, "minlength", String(value));
+    this.setAttributeNS(null, "maxlength", String(value));
   }
 
   get minLength() {
@@ -761,6 +756,13 @@ class HTMLInputElementImpl extends HTMLElementImpl {
       return 0;
     }
     return parseInt(this.getAttributeNS(null, "minlength"));
+  }
+
+  set minLength(value) {
+    if (value < 0) {
+      throw DOMException.create(this._globalObject, ["The index is not in the allowed range.", "IndexSizeError"]);
+    }
+    this.setAttributeNS(null, "minlength", String(value));
   }
 
   get size() {

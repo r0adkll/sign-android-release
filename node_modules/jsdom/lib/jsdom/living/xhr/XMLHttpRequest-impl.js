@@ -76,6 +76,7 @@ const uniqueResponseHeaders = new Set([
 const corsSafeResponseHeaders = new Set([
   "cache-control",
   "content-language",
+  "content-length",
   "content-type",
   "expires",
   "last-modified",
@@ -654,19 +655,17 @@ class XMLHttpRequestImpl extends XMLHttpRequestEventTargetImpl {
         xhrUtils.dispatchError(this);
       });
 
-      client.on("response", res => receiveResponse(this, res));
+      client.on("response", (res, url) => receiveResponse(this, res, url));
 
-      client.on("redirect", () => {
-        const { response } = client;
-        const destUrlObj = new URL(response.request.headers.Referer);
-
-        const urlObj = new URL(response.request.uri.href);
+      client.on("redirect", (response, requestHeaders, currentURL) => {
+        const destUrlObj = new URL(requestHeaders.Referer);
+        const urlObj = new URL(currentURL);
 
         if (destUrlObj.origin !== urlObj.origin && destUrlObj.origin !== flag.origin) {
           properties.origin = "null";
         }
 
-        response.request.headers.Origin = properties.origin;
+        requestHeaders.Origin = properties.origin;
 
         if (flag.origin !== destUrlObj.origin &&
             destUrlObj.protocol !== "data:") {
@@ -762,16 +761,15 @@ function readyStateChange(xhr, readyState) {
   fireAnEvent("readystatechange", xhr);
 }
 
-function receiveResponse(xhr, response) {
+function receiveResponse(xhr, response, currentURL) {
   const { flag, properties } = xhr;
-  const { statusCode } = response;
+  const { rawHeaders, statusCode } = response;
 
   let byteOffset = 0;
 
   const headers = {};
   const filteredResponseHeaders = [];
   const headerMap = {};
-  const { rawHeaders } = response;
   const n = Number(rawHeaders.length);
   for (let i = 0; i < n; i += 2) {
     const k = rawHeaders[i];
@@ -790,7 +788,7 @@ function receiveResponse(xhr, response) {
     headerMap[kl] = k;
   }
 
-  const destUrlObj = new URL(response.request.uri.href);
+  const destUrlObj = new URL(currentURL);
   if (properties.origin !== destUrlObj.origin &&
       destUrlObj.protocol !== "data:") {
     if (!xhrUtils.validCORSHeaders(xhr, response, flag, properties, properties.origin)) {
@@ -884,7 +882,10 @@ function receiveResponse(xhr, response) {
     properties.timeoutFn = null;
     properties.timeoutStart = 0;
     properties.client = null;
-    fireAnEvent("progress", xhr, ProgressEvent, progressObj);
+    if (lastProgressReported !== progressObj.loaded) {
+      // https://github.com/whatwg/xhr/issues/318
+      fireAnEvent("progress", xhr, ProgressEvent, progressObj);
+    }
     readyStateChange(xhr, READY_STATES.DONE);
     fireAnEvent("load", xhr, ProgressEvent, progressObj);
     fireAnEvent("loadend", xhr, ProgressEvent, progressObj);

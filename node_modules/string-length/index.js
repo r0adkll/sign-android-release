@@ -7,7 +7,13 @@ const stringLength = string => {
 		return 0;
 	}
 
-	return stripAnsi(string).match(charRegex()).length;
+	const strippedString = stripAnsi(string);
+
+	if (strippedString === '') {
+		return 0;
+	}
+
+	return strippedString.match(charRegex()).length;
 };
 
 module.exports = stringLength;

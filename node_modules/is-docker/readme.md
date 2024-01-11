@@ -1,4 +1,4 @@
-# is-docker [![Build Status](https://travis-ci.com/sindresorhus/is-docker.svg?branch=master)](https://travis-ci.com/github/sindresorhus/is-docker)
+# is-docker
 
 > Check if the process is running inside a Docker container
 

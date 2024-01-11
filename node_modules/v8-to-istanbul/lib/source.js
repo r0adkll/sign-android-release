@@ -14,35 +14,62 @@ module.exports = class CovSource {
   _buildLines (source) {
     let position = 0
     let ignoreCount = 0
+    let ignoreAll = false
     for (const [i, lineStr] of source.split(/(?<=\r?\n)/u).entries()) {
       const line = new CovLine(i + 1, position, lineStr)
       if (ignoreCount > 0) {
         line.ignore = true
         ignoreCount--
-      } else {
-        ignoreCount = this._parseIgnoreNext(lineStr, line)
+      } else if (ignoreAll) {
+        line.ignore = true
       }
       this.lines.push(line)
       position += lineStr.length
+
+      const ignoreToken = this._parseIgnore(lineStr)
+      if (!ignoreToken) continue
+
+      line.ignore = true
+      if (ignoreToken.count !== undefined) {
+        ignoreCount = ignoreToken.count
+      }
+      if (ignoreToken.start || ignoreToken.stop) {
+        ignoreAll = ignoreToken.start
+        ignoreCount = 0
+      }
     }
   }
 
-  _parseIgnoreNext (lineStr, line) {
-    const testIgnoreNextLines = lineStr.match(/^\W*\/\* c8 ignore next (?<count>[0-9]+)? *\*\/\W*$/)
+  /**
+   * Parses for comments:
+   *    c8 ignore next
+   *    c8 ignore next 3
+   *    c8 ignore start
+   *    c8 ignore stop
+   * @param {string} lineStr
+   * @return {{count?: number, start?: boolean, stop?: boolean}|undefined}
+   */
+  _parseIgnore (lineStr) {
+    const testIgnoreNextLines = lineStr.match(/^\W*\/\* c8 ignore next (?<count>[0-9]+) *\*\/\W*$/)
     if (testIgnoreNextLines) {
-      line.ignore = true
-      if (testIgnoreNextLines.groups.count) {
-        return Number(testIgnoreNextLines.groups.count)
-      } else {
-        return 1
-      }
-    } else {
-      if (lineStr.match(/\/\* c8 ignore next \*\//)) {
-        line.ignore = true
-      }
+      return { count: Number(testIgnoreNextLines.groups.count) }
     }
 
-    return 0
+    // Check if comment is on its own line.
+    if (lineStr.match(/^\W*\/\* c8 ignore next *\*\/\W*$/)) {
+      return { count: 1 }
+    }
+
+    if (lineStr.match(/\/\* c8 ignore next \*\//)) {
+      // Won't ignore successive lines, but the current line will be ignored.
+      return { count: 0 }
+    }
+
+    const testIgnoreStartStop = lineStr.match(/\/\* c8 ignore (?<mode>start|stop) *\*\//)
+    if (testIgnoreStartStop) {
+      if (testIgnoreStartStop.groups.mode === 'start') return { start: true }
+      if (testIgnoreStartStop.groups.mode === 'stop') return { stop: true }
+    }
   }
 
   // given a start column and end column in absolute offsets within
