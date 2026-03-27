@@ -82,6 +82,9 @@ export async function signAabFile(
     const jarSignerPath = await io.which('jarsigner', true);
     core.debug(`Found 'jarsigner' @ ${jarSignerPath}`);
     const args = [
+        '-verbose',
+        '-sigalg', 'SHA256withRSA',
+        '-digestalg', 'SHA-256',
         '-keystore', signingKeyFile,
         '-storepass', keyStorePassword,
     ];
@@ -92,7 +95,8 @@ export async function signAabFile(
 
     args.push(aabFile, alias);
 
-    await exec.exec(`"${jarSignerPath}"`, args);
+    const result = await exec.exec(`"${jarSignerPath}"`, args);
+    core.debug(`JarSigner Result (${result}) with '${args.join(' ')}`);
 
-    return aabFile
+    return aabFile;
 }
