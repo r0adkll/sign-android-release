@@ -128,7 +128,7 @@ steps:
   - uses: jungwinter/split@v1
     id: signed_files
     with:
-      msg: ${{ steps.sign_app.signedReleaseFiles }}
+      msg: ${{ steps.sign_app.outputs.signedReleaseFiles }}
       separator: ':'
 
   - name: Example Release
