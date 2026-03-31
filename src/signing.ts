@@ -6,10 +6,11 @@ import * as fs from "fs";
 
 export async function signApkFile(
     apkFile: string,
+    trimUnsigned: boolean,
     signingKeyFile: string,
     alias: string,
     keyStorePassword: string,
-    keyPassword?: string
+    keyPassword?: string,
 ): Promise<string> {
 
     core.debug("Zipaligning APK file");
@@ -32,7 +33,7 @@ export async function signApkFile(
         '-v', '4',
         apkFile
     ]);
-    
+
     await exec.exec(`"cp"`, [
         apkFile,
         alignedApkFile
@@ -45,7 +46,7 @@ export async function signApkFile(
     core.debug(`Found 'apksigner' @ ${apkSigner}`);
 
     // apksigner sign --ks my-release-key.jks --out my-app-release.apk my-app-unsigned-aligned.apk
-    const signedApkFile = apkFile.replace('.apk', '-signed.apk');
+    const signedApkFile = (trimUnsigned ? apkFile.replace('-unsigned.apk', '.apk') : apkFile).replace('.apk', '-signed.apk');
     const args = [
         'sign',
         '--ks', signingKeyFile,

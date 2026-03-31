@@ -20,6 +20,9 @@ inputs:
   keyPassword:
     description: 'The password for the key'
     required: false
+  trimUnsigned:
+    description: 'Whether a trailing -unsigned should be trimmed from APK names - set to "true" to enable'
+    required: false
 outputs:
   signedReleaseFile:
     description: 'The signed release APK or AAB file, if single'
