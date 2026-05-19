@@ -54,5 +54,5 @@ outputs:
   signedReleaseFile12:
     description: 'The 12th signed release APK or AAB file'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'lib/main.js'
