@@ -31,6 +31,11 @@ Then copy the contents of the `.txt` file to your GH secrets
 
 **Optional:** The private key password for your signing keystore
 
+### `trimUnsigned`
+
+**Optional:** Set to `true` to trim trailing `-unsigned` from the APK name before signing,
+to avoid `...-unsigned-signed.apk`.
+
 ## ENV: `BUILD_TOOLS_VERSION`
 
 **Optional:** You can manually specify a version of build-tools to use. We use `34.0.0` by default.
