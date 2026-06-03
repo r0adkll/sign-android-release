@@ -2,11 +2,12 @@
   "name": "sign-android-release",
   "version": "1.0.4",
   "private": true,
+  "type": "module",
   "description": "GitHub action used to sign Android release packages",
   "main": "lib/main.js",
   "scripts": {
     "build": "tsc",
-    "test": "jest",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "deploy": "tsc && ./update_release.sh"
   },
   "repository": {
