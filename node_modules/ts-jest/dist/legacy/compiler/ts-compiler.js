@@ -1,0 +1,581 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TsCompiler = void 0;
+const path_1 = require("path");
+const bs_logger_1 = require("bs-logger");
+const lodash_memoize_1 = __importDefault(require("lodash.memoize"));
+const typescript_1 = __importDefault(require("typescript"));
+const constants_1 = require("../../constants");
+const transpile_module_1 = require("../../transpilers/typescript/transpile-module");
+const utils_1 = require("../../utils");
+const messages_1 = require("../../utils/messages");
+const compiler_utils_1 = require("./compiler-utils");
+const assertCompilerOptionsWithJestTransformMode = (compilerOptions, isEsmMode, logger) => {
+    if (isEsmMode && compilerOptions.module === typescript_1.default.ModuleKind.CommonJS) {
+        logger.error("The current compiler option \"module\" value is not suitable for Jest ESM mode. Please either use ES module kinds or Node16/NodeNext module kinds with \"type: module\" in package.json" /* Errors.InvalidModuleKindForEsm */);
+    }
+};
+class TsCompiler {
+    configSet;
+    runtimeCacheFS;
+    _logger;
+    _ts;
+    _initialCompilerOptions;
+    _compilerOptions;
+    /**
+     * @private
+     */
+    _runtimeCacheFS;
+    /**
+     * @private
+     */
+    _fileContentCache;
+    /**
+     * @internal
+     */
+    _parsedTsConfig;
+    /**
+     * @internal
+     */
+    _fileVersionCache;
+    /**
+     * @internal
+     */
+    _cachedReadFile;
+    /**
+     * @internal
+     */
+    _projectVersion = 1;
+    /**
+     * @internal
+     */
+    _previousCompiledModuleKind;
+    /**
+     * @internal
+     */
+    _languageService;
+    /**
+     * @internal
+     */
+    _moduleResolutionHost;
+    /**
+     * @internal
+     */
+    _moduleResolutionCache;
+    program;
+    constructor(configSet, runtimeCacheFS) {
+        this.configSet = configSet;
+        this.runtimeCacheFS = runtimeCacheFS;
+        this._ts = configSet.compilerModule;
+        this._logger = utils_1.rootLogger.child({ namespace: 'ts-compiler' });
+        this._parsedTsConfig = this.configSet.parsedTsConfig;
+        this._initialCompilerOptions = { ...this._parsedTsConfig.options };
+        this._compilerOptions = { ...this._initialCompilerOptions };
+        this._runtimeCacheFS = runtimeCacheFS;
+        if (!this.configSet.isolatedModules) {
+            this._fileContentCache = new Map();
+            this._fileVersionCache = new Map();
+            this._cachedReadFile = this._logger.wrap({
+                namespace: 'ts:serviceHost',
+                call: null,
+                [bs_logger_1.LogContexts.logLevel]: bs_logger_1.LogLevels.trace,
+            }, 'readFile', (0, lodash_memoize_1.default)(this._ts.sys.readFile));
+            /* istanbul ignore next */
+            this._moduleResolutionHost = {
+                fileExists: (0, lodash_memoize_1.default)(this._ts.sys.fileExists),
+                readFile: this._cachedReadFile,
+                directoryExists: (0, lodash_memoize_1.default)(this._ts.sys.directoryExists),
+                getCurrentDirectory: () => this.configSet.cwd,
+                realpath: this._ts.sys.realpath && (0, lodash_memoize_1.default)(this._ts.sys.realpath),
+                getDirectories: (0, lodash_memoize_1.default)(this._ts.sys.getDirectories),
+                useCaseSensitiveFileNames: () => this._ts.sys.useCaseSensitiveFileNames,
+            };
+            this._moduleResolutionCache = this._ts.createModuleResolutionCache(this.configSet.cwd, this._ts.sys.useCaseSensitiveFileNames ? (x) => x : (x) => x.toLowerCase(), this._compilerOptions);
+            this._createLanguageService();
+        }
+    }
+    getResolvedModules(fileContent, fileName, runtimeCacheFS) {
+        // In watch mode, it is possible that the initial cacheFS becomes empty
+        if (!this.runtimeCacheFS.size) {
+            this._runtimeCacheFS = runtimeCacheFS;
+        }
+        this._logger.debug({ fileName }, 'getResolvedModules(): resolve direct imported module paths');
+        const importedModulePaths = Array.from(new Set(this._getImportedModulePaths(fileContent, fileName)));
+        this._logger.debug({ fileName }, 'getResolvedModules(): resolve nested imported module paths from directed imported module paths');
+        importedModulePaths.forEach((importedModulePath) => {
+            const resolvedFileContent = this._getFileContentFromCache(importedModulePath);
+            importedModulePaths.push(...this._getImportedModulePaths(resolvedFileContent, importedModulePath).filter((modulePath) => !importedModulePaths.includes(modulePath)));
+        });
+        return importedModulePaths;
+    }
+    /**
+     * Apply ts-jest's runtime fixups on top of the user's compiler options before
+     * handing them to the language service or transpiler.
+     *
+     * Two compiler-options now flow through dedicated helpers so the produced
+     * options are always a TypeScript-valid combination:
+     *
+     *   - `moduleResolution` is delegated to `resolveCompatibleModuleResolution`,
+     *     which preserves the user's value when it is valid alongside the
+     *     `module` ts-jest forces at runtime (CommonJS on the CJS path, or
+     *     ESNext / the user's original `module` on the ESM path) and otherwise
+     *     substitutes a TypeScript-valid alternative. When the user has not set
+     *     a value the historical Node10 default is kept, so unchanged tsconfigs
+     *     see the exact same resolved options as before.
+     *
+     *   - `customConditions` is delegated to `preserveCustomConditionsIfCompatible`,
+     *     which keeps the user's value only when the resolved
+     *     `moduleResolution` supports it (`Bundler` / `Node16` / `NodeNext`)
+     *     and clears it otherwise. The pre-#4198 code unconditionally cleared
+     *     this option because the hardcoded `Node10` override always made it
+     *     incompatible; that is no longer true.
+     *
+     * @see https://github.com/kulshekhar/ts-jest/issues/4198
+     */
+    fixupCompilerOptionsForModuleKind(compilerOptions, isEsm) {
+        if (!isEsm) {
+            const moduleResolution = this.resolveCompatibleModuleResolution(this._ts.ModuleKind.CommonJS, compilerOptions.moduleResolution);
+            return {
+                ...compilerOptions,
+                module: this._ts.ModuleKind.CommonJS,
+                moduleResolution,
+                customConditions: this.preserveCustomConditionsIfCompatible(moduleResolution, compilerOptions.customConditions),
+            };
+        }
+        let moduleKind = compilerOptions.module ?? this._ts.ModuleKind.ESNext;
+        let esModuleInterop = compilerOptions.esModuleInterop;
+        if ((0, transpile_module_1.isModernNodeModuleKind)(moduleKind)) {
+            esModuleInterop = true;
+            moduleKind = this._ts.ModuleKind.ESNext;
+        }
+        const moduleResolution = this.resolveCompatibleModuleResolution(moduleKind, compilerOptions.moduleResolution);
+        return {
+            ...compilerOptions,
+            module: moduleKind,
+            esModuleInterop,
+            moduleResolution,
+            customConditions: this.preserveCustomConditionsIfCompatible(moduleResolution, compilerOptions.customConditions),
+        };
+    }
+    /**
+     * Pick a `moduleResolution` value that is valid alongside the `module` ts-jest
+     * forces at runtime. Closes #4198: previously this was hardcoded to Node10 and
+     * silently overrode whatever the user set in tsconfig, even when the user value
+     * would have been valid (e.g. Bundler with module: ESNext, Classic with CommonJS).
+     *
+     * Substitution rules — each tied to a specific TypeScript diagnostic that the
+     * resulting combination would otherwise raise. The "Bundler-compatible" set is
+     * the one defined by `isBundlerCompatibleModuleKind` (ES2015 / ES2020 / ES2022
+     * / ESNext / Preserve); everything else (CommonJS / AMD / UMD / System / None)
+     * is treated as Bundler-incompatible across the full supported TS range.
+     *
+     *   - Node16 / NodeNext require `module: Node16` or `module: NodeNext` (TS5110).
+     *     ts-jest never emits those module kinds, so these user-supplied values are
+     *     substituted: to Bundler when the forced module is in the
+     *     Bundler-compatible set, or to Node10 otherwise. (Pairing Bundler with a
+     *     non-ES module raises TS5095, and Node10 is the only kind that has been
+     *     valid with non-ES modules across every TypeScript version ts-jest
+     *     supports.)
+     *
+     *   - User-supplied Bundler with a non-Bundler-compatible forced module is
+     *     TS5095, substitute Node10. (TypeScript 6 relaxed this for
+     *     `module: CommonJS` specifically; that relaxation is encoded inside
+     *     `isBundlerCompatibleModuleKind` via a runtime version check, so on
+     *     TS ≥ 6 user-supplied Bundler passes through unchanged on the CJS
+     *     path.)
+     *
+     *   - Anything else (Node10 / Classic / unset) passes through or falls back
+     *     to Node10. These pairings are valid with every forced module kind.
+     *
+     * Compatibility: `ModuleResolutionKind.Bundler` was introduced in
+     * TypeScript 5.0. ts-jest declares `peerDependencies: { typescript: ">=4.3 <7" }`,
+     * so the Bundler member is `undefined` at runtime on TypeScript 4.3 - 4.9.
+     * The Node16/NodeNext substitution falls back to Node10 in that case
+     * (`bundlerResolution` below) to keep the function deterministic across the
+     * full supported range. Users on TypeScript < 5 can never have set Bundler in
+     * tsconfig (the parser rejects it), so the user-supplied-Bundler branch is
+     * unreachable there and needs no separate guard.
+     */
+    resolveCompatibleModuleResolution(forcedModule, userResolution) {
+        const node10Default = this._ts.ModuleResolutionKind.Node10 ?? this._ts.ModuleResolutionKind.NodeJs;
+        if (userResolution === undefined) {
+            return node10Default;
+        }
+        const { Node16, NodeNext, Bundler } = this._ts.ModuleResolutionKind;
+        const bundlerResolution = Bundler ?? node10Default;
+        const canUseBundler = this.isBundlerCompatibleModuleKind(forcedModule);
+        if (userResolution === Node16 || userResolution === NodeNext) {
+            return canUseBundler ? bundlerResolution : node10Default;
+        }
+        if (userResolution === Bundler && !canUseBundler) {
+            return node10Default;
+        }
+        return userResolution;
+    }
+    /**
+     * TypeScript pairs `moduleResolution: bundler` only with ES-module module
+     * kinds (`ES2015` / `ES2020` / `ES2022` / `ESNext`) or `Preserve` (added in
+     * TypeScript 5.4). Pairing `bundler` with `CommonJS`, `AMD`, `UMD`, `System`,
+     * or `None` raises TS5095. Used by `resolveCompatibleModuleResolution` to
+     * gate the `Node16` / `NodeNext` → `Bundler` substitution and the
+     * user-supplied-`Bundler` pass-through, so neither path emits an invalid
+     * pair when the user has selected a non-ES `module`.
+     *
+     * TypeScript 6.0 relaxed TS5095 for `module: CommonJS` specifically
+     * (`CommonJS` + `Bundler` is a valid pair on TS ≥ 6); the other non-ES
+     * module kinds (`AMD` / `UMD` / `System` / `None`) remain Bundler-incompatible
+     * on every TypeScript version. The version is detected at runtime from
+     * `this._ts.version` so the function stays correct across the full
+     * peerDependency range (`>=4.3 <7`).
+     *
+     * @see https://www.typescriptlang.org/tsconfig/#moduleResolution
+     */
+    isBundlerCompatibleModuleKind(moduleKind) {
+        const M = this._ts.ModuleKind;
+        if (moduleKind === M.ESNext || moduleKind === M.ES2015 || moduleKind === M.ES2020 || moduleKind === M.ES2022) {
+            return true;
+        }
+        // `ModuleKind.Preserve` was introduced in TypeScript 5.4; on older
+        // TypeScript versions the property is `undefined` at runtime.
+        if (M.Preserve !== undefined && moduleKind === M.Preserve) {
+            return true;
+        }
+        // TS 6 made `CommonJS` + `Bundler` a valid pair.
+        if (moduleKind === M.CommonJS) {
+            const tsMajor = parseInt(this._ts.version.split('.')[0], 10);
+            return tsMajor >= 6;
+        }
+        return false;
+    }
+    /**
+     * Pass `customConditions` through unchanged when the resolved
+     * `moduleResolution` is one of the kinds that supports it (`Bundler`,
+     * `Node16`, `NodeNext`); strip it otherwise. TypeScript raises TS5098
+     * when `customConditions` is paired with any other resolution kind
+     * (verified empirically against TypeScript 5.9.3 with `tsc -p`).
+     *
+     * Before #4198 the surrounding `fixupCompilerOptionsForModuleKind`
+     * unconditionally cleared `customConditions` because the hardcoded
+     * `Node10` override always made it incompatible. After #4198 the
+     * resolved `moduleResolution` can be `Bundler` (e.g. when the user
+     * has `Node16`/`NodeNext` paired with an ES-family `module`), so we
+     * need to preserve the user's `customConditions` in that case rather
+     * than silently dropping it.
+     *
+     * @see https://www.typescriptlang.org/tsconfig/#customConditions
+     */
+    preserveCustomConditionsIfCompatible(resolvedModuleResolution, userCustomConditions) {
+        const R = this._ts.ModuleResolutionKind;
+        const supportsCustomConditions = resolvedModuleResolution === R.Bundler ||
+            resolvedModuleResolution === R.Node16 ||
+            resolvedModuleResolution === R.NodeNext;
+        return supportsCustomConditions ? userCustomConditions : undefined;
+    }
+    getCompiledOutput(fileContent, fileName, options) {
+        const isEsmMode = this.configSet.useESM && options.supportsStaticESM;
+        this._compilerOptions = this.fixupCompilerOptionsForModuleKind(this._initialCompilerOptions, isEsmMode);
+        const moduleKind = this._initialCompilerOptions.module;
+        const currentModuleKind = this._compilerOptions.module;
+        // Without this, a Program rebuilt for one compile's module kind would be
+        // reused on the next compile when that compile expects a different kind.
+        const moduleKindChangedSinceLastCompile = this._previousCompiledModuleKind !== undefined && this._previousCompiledModuleKind !== currentModuleKind;
+        this._previousCompiledModuleKind = currentModuleKind;
+        if (this._languageService) {
+            if (constants_1.JS_JSX_REGEX.test(fileName) && !this._compilerOptions.allowJs) {
+                this._logger.warn({ fileName: fileName }, (0, messages_1.interpolate)("Got a `.js` file to compile while `allowJs` option is not set to `true` (file: {{path}}). To fix this:\n  - if you want TypeScript to process JS files, set `allowJs` to `true` in your TypeScript config (usually tsconfig.json)\n  - if you do not want TypeScript to process your `.js` files, in your Jest config change the `transform` key which value is `ts-jest` so that it does not match `.js` files anymore" /* Errors.GotJsFileButAllowJsFalse */, { path: fileName }));
+                return {
+                    code: fileContent,
+                };
+            }
+            this._logger.debug({ fileName }, 'getCompiledOutput(): compiling using language service');
+            // Must set memory cache before attempting to compile
+            this._updateMemoryCache(fileContent, fileName, currentModuleKind === moduleKind && !moduleKindChangedSinceLastCompile);
+            const output = this._languageService.getEmitOutput(fileName);
+            const diagnostics = this.getDiagnostics(fileName);
+            if ((0, transpile_module_1.isModernNodeModuleKind)(this._initialCompilerOptions.module)) {
+                this.configSet.raiseDiagnostics([
+                    {
+                        category: this._ts.DiagnosticCategory.Message,
+                        code: utils_1.TsJestDiagnosticCodes.ModernNodeModule,
+                        messageText: messages_1.Helps.UsingModernNodeResolution,
+                        file: undefined,
+                        start: undefined,
+                        length: undefined,
+                    },
+                ]);
+            }
+            if (!isEsmMode && diagnostics.length) {
+                this.configSet.raiseDiagnostics(diagnostics, fileName, this._logger);
+                if (options.watchMode) {
+                    this._logger.debug({ fileName }, '_doTypeChecking(): starting watch mode computing diagnostics');
+                    for (const entry of options.depGraphs.entries()) {
+                        const normalizedModuleNames = entry[1].resolvedModuleNames.map((moduleName) => (0, path_1.normalize)(moduleName));
+                        const fileToReTypeCheck = entry[0];
+                        if (normalizedModuleNames.includes(fileName) && this.configSet.shouldReportDiagnostics(fileToReTypeCheck)) {
+                            this._logger.debug({ fileToReTypeCheck }, '_doTypeChecking(): computing diagnostics using language service');
+                            this._updateMemoryCache(this._getFileContentFromCache(fileToReTypeCheck), fileToReTypeCheck);
+                            const importedModulesDiagnostics = [
+                                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                                ...this._languageService.getSemanticDiagnostics(fileToReTypeCheck),
+                                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                                ...this._languageService.getSyntacticDiagnostics(fileToReTypeCheck),
+                            ];
+                            // will raise or just warn diagnostics depending on config
+                            this.configSet.raiseDiagnostics(importedModulesDiagnostics, fileName, this._logger);
+                        }
+                    }
+                }
+            }
+            if (output.emitSkipped) {
+                if (constants_1.TS_TSX_REGEX.test(fileName)) {
+                    throw new Error((0, messages_1.interpolate)("Unable to process '{{file}}', please make sure that `outDir` in your tsconfig is neither `''` or `'.'`. You can also configure Jest config option `transformIgnorePatterns` to inform `ts-jest` to transform {{file}}" /* Errors.CannotProcessFile */, { file: fileName }));
+                }
+                else {
+                    this._logger.warn((0, messages_1.interpolate)("Unable to process '{{file}}', falling back to original file content. You can also configure Jest config option `transformIgnorePatterns` to ignore {{file}} from transformation or make sure that `outDir` in your tsconfig is neither `''` or `'.'`" /* Errors.CannotProcessFileReturnOriginal */, { file: fileName }));
+                    return {
+                        code: fileContent,
+                    };
+                }
+            }
+            // Throw an error when requiring `.d.ts` files.
+            if (!output.outputFiles.length) {
+                throw new TypeError((0, messages_1.interpolate)("Unable to require `.d.ts` file for file: {{file}}.\nThis is usually the result of a faulty configuration or import. Make sure there is a `.js`, `.json` or another executable extension available alongside `{{file}}`." /* Errors.UnableToRequireDefinitionFile */, {
+                    file: (0, path_1.basename)(fileName),
+                }));
+            }
+            const { outputFiles } = output;
+            return this._compilerOptions.sourceMap
+                ? {
+                    code: (0, compiler_utils_1.updateOutput)(outputFiles[1].text, fileName, outputFiles[0].text),
+                    diagnostics,
+                }
+                : {
+                    code: (0, compiler_utils_1.updateOutput)(outputFiles[0].text, fileName),
+                    diagnostics,
+                };
+        }
+        else {
+            this._logger.debug({ fileName }, 'getCompiledOutput(): compiling as isolated module');
+            assertCompilerOptionsWithJestTransformMode(this._initialCompilerOptions, isEsmMode, this._logger);
+            const result = this._transpileOutput(fileContent, fileName);
+            if (result.diagnostics && this.configSet.shouldReportDiagnostics(fileName)) {
+                this.configSet.raiseDiagnostics(result.diagnostics, fileName, this._logger);
+            }
+            return {
+                code: (0, compiler_utils_1.updateOutput)(result.outputText, fileName, result.sourceMapText),
+            };
+        }
+    }
+    _transpileOutput(fileContent, fileName) {
+        /**
+         * @deprecated
+         *
+         * This code path should be removed in the next major version to benefit from checking on compiler options
+         */
+        if (!(0, transpile_module_1.isModernNodeModuleKind)(this._initialCompilerOptions.module)) {
+            return this._ts.transpileModule(fileContent, {
+                fileName,
+                transformers: this._makeTransformers(this.configSet.resolvedTransformers),
+                compilerOptions: this._compilerOptions,
+                reportDiagnostics: this.configSet.shouldReportDiagnostics(fileName),
+            });
+        }
+        return (0, transpile_module_1.tsTranspileModule)(fileContent, {
+            fileName,
+            transformers: (program) => {
+                this.program = program;
+                return this._makeTransformers(this.configSet.resolvedTransformers);
+            },
+            compilerOptions: this._initialCompilerOptions,
+            reportDiagnostics: fileName ? this.configSet.shouldReportDiagnostics(fileName) : false,
+        });
+    }
+    _makeTransformers(customTransformers) {
+        return {
+            before: customTransformers.before.map((beforeTransformer) => beforeTransformer.factory(this, beforeTransformer.options)),
+            after: customTransformers.after.map((afterTransformer) => afterTransformer.factory(this, afterTransformer.options)),
+            afterDeclarations: customTransformers.afterDeclarations.map((afterDeclarations) => afterDeclarations.factory(this, afterDeclarations.options)),
+        };
+    }
+    /**
+     * @internal
+     */
+    _createLanguageService() {
+        // Initialize memory cache for typescript compiler
+        this._parsedTsConfig.fileNames
+            .filter((fileName) => constants_1.TS_TSX_REGEX.test(fileName) && !this.configSet.isTestFile(fileName))
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            .forEach((fileName) => this._fileVersionCache.set(fileName, 0));
+        /* istanbul ignore next */
+        const serviceHost = {
+            useCaseSensitiveFileNames: () => this._ts.sys.useCaseSensitiveFileNames,
+            getProjectVersion: () => String(this._projectVersion),
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            getScriptFileNames: () => [...this._fileVersionCache.keys()],
+            getScriptVersion: (fileName) => {
+                const normalizedFileName = (0, path_1.normalize)(fileName);
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                const version = this._fileVersionCache.get(normalizedFileName);
+                // We need to return `undefined` and not a string here because TypeScript will use
+                // `getScriptVersion` and compare against their own version - which can be `undefined`.
+                // If we don't return `undefined` it results in `undefined === "undefined"` and run
+                // `createProgram` again (which is very slow). Using a `string` assertion here to avoid
+                // TypeScript errors from the function signature (expects `(x: string) => string`).
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return version === undefined ? undefined : String(version);
+            },
+            getScriptSnapshot: (fileName) => {
+                const normalizedFileName = (0, path_1.normalize)(fileName);
+                const hit = this._isFileInCache(normalizedFileName);
+                this._logger.trace({ normalizedFileName, cacheHit: hit }, 'getScriptSnapshot():', 'cache', hit ? 'hit' : 'miss');
+                // Read file content from either memory cache or Jest runtime cache or fallback to file system read
+                if (!hit) {
+                    const fileContent = 
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    this._fileContentCache.get(normalizedFileName) ??
+                        this._runtimeCacheFS.get(normalizedFileName) ??
+                        this._cachedReadFile?.(normalizedFileName) ??
+                        undefined;
+                    if (fileContent !== undefined) {
+                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                        this._fileContentCache.set(normalizedFileName, fileContent);
+                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                        this._fileVersionCache.set(normalizedFileName, 1);
+                    }
+                }
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                const contents = this._fileContentCache.get(normalizedFileName);
+                if (contents === undefined)
+                    return;
+                return this._ts.ScriptSnapshot.fromString(contents);
+            },
+            fileExists: (0, lodash_memoize_1.default)(this._ts.sys.fileExists),
+            readFile: this._cachedReadFile ?? this._ts.sys.readFile,
+            readDirectory: (0, lodash_memoize_1.default)(this._ts.sys.readDirectory),
+            getDirectories: (0, lodash_memoize_1.default)(this._ts.sys.getDirectories),
+            directoryExists: (0, lodash_memoize_1.default)(this._ts.sys.directoryExists),
+            realpath: this._ts.sys.realpath && (0, lodash_memoize_1.default)(this._ts.sys.realpath),
+            getNewLine: () => constants_1.LINE_FEED,
+            getCurrentDirectory: () => this.configSet.cwd,
+            getCompilationSettings: () => this._compilerOptions,
+            getDefaultLibFileName: () => this._ts.getDefaultLibFilePath(this._compilerOptions),
+            getCustomTransformers: () => this._makeTransformers(this.configSet.resolvedTransformers),
+            resolveModuleNames: (moduleNames, containingFile) => moduleNames.map((moduleName) => this._resolveModuleName(moduleName, containingFile).resolvedModule),
+        };
+        this._logger.debug('created language service');
+        this._languageService = this._ts.createLanguageService(serviceHost, this._ts.createDocumentRegistry(this._ts.sys.useCaseSensitiveFileNames, this.configSet.cwd));
+        this.program = this._languageService.getProgram();
+    }
+    /**
+     * @internal
+     */
+    _getFileContentFromCache(filePath) {
+        const normalizedFilePath = (0, path_1.normalize)(filePath);
+        let resolvedFileContent = this._runtimeCacheFS.get(normalizedFilePath);
+        if (!resolvedFileContent) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            resolvedFileContent = this._moduleResolutionHost.readFile(normalizedFilePath);
+            this._runtimeCacheFS.set(normalizedFilePath, resolvedFileContent);
+        }
+        return resolvedFileContent;
+    }
+    /**
+     * @internal
+     */
+    _getImportedModulePaths(resolvedFileContent, containingFile) {
+        return this._ts
+            .preProcessFile(resolvedFileContent, true, true)
+            .importedFiles.map((importedFile) => {
+            const { resolvedModule } = this._resolveModuleName(importedFile.fileName, containingFile);
+            /* istanbul ignore next already covered  */
+            const resolvedFileName = resolvedModule?.resolvedFileName;
+            /* istanbul ignore next already covered  */
+            return resolvedFileName && !resolvedModule?.isExternalLibraryImport ? resolvedFileName : '';
+        })
+            .filter((resolveFileName) => !!resolveFileName);
+    }
+    /**
+     * @internal
+     */
+    _resolveModuleName(moduleNameToResolve, containingFile) {
+        const getImpliedNodeFormat = this._ts.getImpliedNodeFormatForFile;
+        const resolutionMode = typeof getImpliedNodeFormat === 'function'
+            ? getImpliedNodeFormat(containingFile, undefined, 
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            this._moduleResolutionHost, this._compilerOptions)
+            : undefined;
+        return this._ts.resolveModuleName(moduleNameToResolve, containingFile, this._compilerOptions, 
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        this._moduleResolutionHost, 
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        this._moduleResolutionCache, undefined, resolutionMode);
+    }
+    /**
+     * @internal
+     */
+    _isFileInCache(fileName) {
+        return (
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        this._fileContentCache.has(fileName) &&
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            this._fileVersionCache.has(fileName) &&
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            this._fileVersionCache.get(fileName) !== 0);
+    }
+    /**
+     * @internal
+     */
+    _updateMemoryCache(contents, fileName, isModuleKindTheSame = true) {
+        this._logger.debug({ fileName }, 'updateMemoryCache: update memory cache for language service');
+        let shouldIncrementProjectVersion = false;
+        const hit = this._isFileInCache(fileName);
+        if (!hit) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            this._fileVersionCache.set(fileName, 1);
+            shouldIncrementProjectVersion = true;
+        }
+        else {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const prevVersion = this._fileVersionCache.get(fileName);
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const previousContents = this._fileContentCache.get(fileName);
+            // Avoid incrementing cache when nothing has changed.
+            if (previousContents !== contents) {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                this._fileVersionCache.set(fileName, prevVersion + 1);
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                this._fileContentCache.set(fileName, contents);
+                shouldIncrementProjectVersion = true;
+            }
+            /**
+             * When a file is from node_modules or referenced to a referenced project and jest wants to transform it, we need
+             * to make sure that the Program is updated with this information
+             */
+            if (!this._parsedTsConfig.fileNames.includes(fileName) || !isModuleKindTheSame) {
+                shouldIncrementProjectVersion = true;
+            }
+        }
+        if (shouldIncrementProjectVersion)
+            this._projectVersion++;
+    }
+    /**
+     * @internal
+     */
+    getDiagnostics(fileName) {
+        const diagnostics = [];
+        if (this.configSet.shouldReportDiagnostics(fileName)) {
+            this._logger.debug({ fileName }, '_doTypeChecking(): computing diagnostics using language service');
+            // Get the relevant diagnostics - this is 3x faster than `getPreEmitDiagnostics`.
+            diagnostics.push(
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            ...this._languageService.getSemanticDiagnostics(fileName), 
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            ...this._languageService.getSyntacticDiagnostics(fileName));
+        }
+        return diagnostics;
+    }
+}
+exports.TsCompiler = TsCompiler;

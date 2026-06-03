@@ -1,13 +1,5 @@
-// Type definitions for @babel/template 7.4
-// Project: https://github.com/babel/babel/tree/master/packages/babel-template, https://babeljs.io
-// Definitions by: Troy Gerwien <https://github.com/yortus>
-//                 Marvin Hagemeister <https://github.com/marvinhagemeister>
-//                 Melvin Groenhoff <https://github.com/mgroenhoff>
-//                 ExE Boss <https://github.com/ExE-Boss>
-// Definitions: https://github.com/DefinitelyTyped/DefinitelyTyped
-
-import { ParserOptions } from '@babel/parser';
-import { Expression, Program, Statement } from '@babel/types';
+import { ParserOptions } from "@babel/parser";
+import { Expression, Program, Statement } from "@babel/types";
 
 export interface TemplateBuilderOptions extends ParserOptions {
     /**
@@ -16,7 +8,7 @@ export interface TemplateBuilderOptions extends ParserOptions {
      *
      * This option cannot be used when using `%%foo%%` style placeholders.
      */
-    placeholderWhitelist?: Set<string> | null;
+    placeholderWhitelist?: Set<string> | null | undefined;
 
     /**
      * A pattern to search for when looking for `Identifier` and `StringLiteral`
@@ -29,7 +21,7 @@ export interface TemplateBuilderOptions extends ParserOptions {
      *
      * @default /^[_$A-Z0-9]+$/
      */
-    placeholderPattern?: RegExp | false | null;
+    placeholderPattern?: RegExp | false | null | undefined;
 
     /**
      * Set this to `true` to preserve comments from the template string
@@ -37,7 +29,7 @@ export interface TemplateBuilderOptions extends ParserOptions {
      *
      * @default false
      */
-    preserveComments?: boolean | null;
+    preserveComments?: boolean | null | undefined;
 
     /**
      * Set to `true` to use `%%foo%%` style placeholders, `false` to use legacy placeholders
@@ -47,7 +39,7 @@ export interface TemplateBuilderOptions extends ParserOptions {
      *
      * @since 7.4.0
      */
-    syntacticPlaceholders?: boolean | null;
+    syntacticPlaceholders?: boolean | null | undefined;
 }
 
 export interface TemplateBuilder<T> {
