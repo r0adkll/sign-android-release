@@ -7,19 +7,29 @@ License at http://www.apache.org/licenses/LICENSE-2.0
 THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
 WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-MERCHANTABLITY OR NON-INFRINGEMENT.
+MERCHANTABILITY OR NON-INFRINGEMENT.
 
 See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 ***************************************************************************** */
 
 
-
-/// <reference no-default-lib="true"/>
-
-
 declare namespace Intl {
-    type DateTimeFormatPartTypes = "day" | "dayPeriod" | "era" | "hour" | "literal" | "minute" | "month" | "second" | "timeZoneName" | "weekday" | "year";
+    interface DateTimeFormatPartTypesRegistry {
+        day: any;
+        dayPeriod: any;
+        era: any;
+        hour: any;
+        literal: any;
+        minute: any;
+        month: any;
+        second: any;
+        timeZoneName: any;
+        weekday: any;
+        year: any;
+    }
+
+    type DateTimeFormatPartTypes = keyof DateTimeFormatPartTypesRegistry;
 
     interface DateTimeFormatPart {
         type: DateTimeFormatPartTypes;

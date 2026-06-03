@@ -1,8 +1,8 @@
 import * as core from '@actions/core';
-import {signAabFile, signApkFile} from "./signing";
+import {signAabFile, signApkFile} from "./signing.js";
 import path from "path";
 import fs from "fs";
-import * as io from "./io-utils";
+import * as io from "./io-utils.js";
 
 async function run() {
   try {
@@ -66,7 +66,7 @@ async function run() {
       core.setFailed('No release files (.apk or .aab) could be found.');
     }
   } catch (error) {
-    core.setFailed(error.message);
+    core.setFailed(error instanceof Error ? error.message : String(error));
   }
 }
 
