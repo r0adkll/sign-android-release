@@ -66,7 +66,7 @@ async function run() {
       core.setFailed('No release files (.apk or .aab) could be found.');
     }
   } catch (error) {
-    core.setFailed(error.message);
+    core.setFailed(error instanceof Error ? error.message : String(error));
   }
 }
 
